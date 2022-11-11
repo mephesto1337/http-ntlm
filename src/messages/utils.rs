@@ -23,6 +23,7 @@ pub struct Fields {
     pub max_len: u16,
     pub offset: u32,
 }
+
 impl<'a> Wire<'a> for Fields {
     fn serialize_into<W>(&self, writer: &mut W) -> std::io::Result<usize>
     where

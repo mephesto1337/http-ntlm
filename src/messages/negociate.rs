@@ -1,4 +1,4 @@
-use nom::bytes::complete::{tag, take};
+use nom::bytes::complete::tag;
 use nom::combinator::verify;
 use nom::error::context;
 use nom::number::complete::le_u32;
@@ -16,8 +16,13 @@ pub struct Negociate<'a> {
     pub negociate_flags: u32,
     pub domain_name: Fields,
     pub workstation: Fields,
-    pub version: [u8; 8],
     pub payload: &'a [u8],
+}
+
+impl<'a> Negociate<'a> {
+    pub fn version(&'a self) -> &'a [u8] {
+        &self.payload[..8]
+    }
 }
 
 impl<'a> Wire<'a> for Negociate<'a> {
@@ -32,8 +37,8 @@ impl<'a> Wire<'a> for Negociate<'a> {
         written += write_u32(writer, self.negociate_flags)?;
         written += self.domain_name.serialize_into(writer)?;
         written += self.workstation.serialize_into(writer)?;
-        writer.write_all(&self.version[..])?;
-        written += &self.version[..].len();
+        debug_assert_eq!(written, Self::header_size());
+
         writer.write_all(self.payload)?;
         written += self.payload.len();
 
@@ -44,40 +49,30 @@ impl<'a> Wire<'a> for Negociate<'a> {
     where
         E: super::NomError<'a>,
     {
-        let mut version = [0u8; 8];
+        let (payload, (negociate_flags, domain_name, workstation)) = context(
+            "Negociate",
+            preceded(
+                tuple((
+                    tag(SIGNATURE),
+                    verify(le_u32, |mt| dbg!(*mt) == MESSAGE_TYPE),
+                )),
+                tuple((le_u32, Fields::deserialize, Fields::deserialize)),
+            ),
+        )(input)?;
 
-        let (payload, (negociate_flags, domain_name, workstation, version_content)) =
-            context(
-                "Negociate",
-                preceded(
-                    tuple((
-                        tag(SIGNATURE),
-                        verify(le_u32, |mt| dbg!(*mt) == MESSAGE_TYPE),
-                    )),
-                    tuple((
-                        le_u32,
-                        Fields::deserialize,
-                        Fields::deserialize,
-                        take(std::mem::size_of_val(&version)),
-                    )),
-                ),
-            )(input)?;
-
-        version.copy_from_slice(version_content);
         Ok((
             &b""[..],
             Self {
                 negociate_flags,
                 domain_name,
                 workstation,
-                version,
                 payload,
             },
         ))
     }
 
     fn header_size() -> usize {
-        40
+        32
     }
 }
 
@@ -99,8 +94,7 @@ mod tests {
                 max_len: 0,
                 offset: 0,
             },
-            version: [0x05, 0x01, 0x28, 0x0a, 0x00, 0x00, 0x00, 0x0f],
-            payload: &b""[..],
+            payload: &[0x05, 0x01, 0x28, 0x0a, 0x00, 0x00, 0x00, 0x0f][..],
         };
         let m = "TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAFASgKAAAADw==";
         let message = base64::decode(m).unwrap();
@@ -125,8 +119,7 @@ mod tests {
                 max_len: 0,
                 offset: 0,
             },
-            version: [0x05, 0x01, 0x28, 0x0a, 0x00, 0x00, 0x00, 0x0f],
-            payload: &b""[..],
+            payload: &[0x05, 0x01, 0x28, 0x0a, 0x00, 0x00, 0x00, 0x0f][..],
         };
         let m = "TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAFASgKAAAADw==";
         pretty_assertions::assert_eq!(base64::encode(negociate_message.serialize()), m);

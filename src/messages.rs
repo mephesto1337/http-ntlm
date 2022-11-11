@@ -27,7 +27,8 @@ trait Wire<'a>: Sized {
 
 const SIGNATURE: &'static [u8; 8] = b"NTLMSSP\0";
 
-mod authenticate;
-mod challenge;
-mod negociate;
+pub mod authenticate;
+pub mod challenge;
+pub mod negociate;
+mod unicode_string;
 mod utils;

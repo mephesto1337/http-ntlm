@@ -1,10 +1,11 @@
-use nom::bytes::complete::{tag, take};
+use nom::bytes::complete::tag;
 use nom::combinator::verify;
 use nom::error::context;
 use nom::number::complete::{le_u32, le_u64};
 use nom::sequence::{preceded, tuple};
 
 use super::{
+    unicode_string::UnicodeString,
     utils::{write_u32, write_u64, Fields},
     Wire, SIGNATURE,
 };
@@ -17,8 +18,31 @@ pub struct Challenge<'a> {
     pub negociate_flags: u32,
     pub server_challenge: u64,
     pub target_info: Fields,
-    pub version: [u8; 8],
     pub payload: &'a [u8],
+}
+
+impl<'a> Challenge<'a> {
+    pub fn get_target_name(&'a self) -> Result<UnicodeString, &'a [u8]> {
+        let offset = (self.target_name.offset as usize)
+            .checked_sub(Self::header_size())
+            .expect("Offset is too small");
+        let data = &self.payload[offset..][..self.target_name.len as usize];
+
+        UnicodeString::from_bytes(data).map_err(|_| data)
+    }
+
+    pub fn get_target_info(&'a self) -> Result<UnicodeString, &'a [u8]> {
+        let offset = (self.target_info.offset as usize)
+            .checked_sub(Self::header_size())
+            .expect("Offset is too small");
+        let data = &self.payload[offset..][..self.target_info.len as usize];
+
+        UnicodeString::from_bytes(data).map_err(|_| data)
+    }
+
+    pub fn version(&'a self) -> &'a [u8] {
+        &self.payload[..8]
+    }
 }
 
 impl<'a> Wire<'a> for Challenge<'a> {
@@ -35,8 +59,7 @@ impl<'a> Wire<'a> for Challenge<'a> {
         written += write_u64(writer, self.server_challenge)?;
         written += write_u64(writer, 0)?;
         written += self.target_info.serialize_into(writer)?;
-        written += self.version.len();
-        writer.write_all(&self.version[..])?;
+
         debug_assert_eq!(written, Self::header_size());
         writer.write_all(self.payload)?;
         written += self.payload.len();
@@ -48,34 +71,21 @@ impl<'a> Wire<'a> for Challenge<'a> {
     where
         E: super::NomError<'a>,
     {
-        let mut version = [0u8; 8];
+        let (payload, (target_name, negociate_flags, server_challenge, _reserved, target_info)) =
+            context(
+                "Challenge",
+                preceded(
+                    tuple((tag(SIGNATURE), verify(le_u32, |mt| *mt == MESSAGE_TYPE))),
+                    tuple((
+                        Fields::deserialize,
+                        le_u32,
+                        le_u64,
+                        verify(le_u64, |reserved| *reserved == 0),
+                        Fields::deserialize,
+                    )),
+                ),
+            )(input)?;
 
-        let (
-            payload,
-            (
-                target_name,
-                negociate_flags,
-                server_challenge,
-                _reserved,
-                target_info,
-                version_content,
-            ),
-        ) = context(
-            "Challenge",
-            preceded(
-                tuple((tag(SIGNATURE), verify(le_u32, |mt| *mt == MESSAGE_TYPE))),
-                tuple((
-                    Fields::deserialize,
-                    le_u32,
-                    le_u64,
-                    verify(le_u64, |reserved| *reserved == 0),
-                    Fields::deserialize,
-                    take(std::mem::size_of_val(&version)),
-                )),
-            ),
-        )(input)?;
-
-        version.copy_from_slice(version_content);
         Ok((
             &b""[..],
             Self {
@@ -83,14 +93,13 @@ impl<'a> Wire<'a> for Challenge<'a> {
                 negociate_flags,
                 server_challenge,
                 target_info,
-                version,
                 payload,
             },
         ))
     }
 
     fn header_size() -> usize {
-        56
+        48
     }
 }
 
@@ -114,21 +123,22 @@ mod tests {
                 max_len: 118,
                 offset: 64,
             },
-            version: [67, 0, 73, 0, 83, 0, 67, 0],
             payload: &[
-                79, 0, 76, 0, 65, 0, 66, 0, 2, 0, 16, 0, 67, 0, 73, 0, 83, 0, 67, 0, 79, 0, 76, 0,
-                65, 0, 66, 0, 1, 0, 16, 0, 80, 0, 79, 0, 83, 0, 69, 0, 73, 0, 68, 0, 79, 0, 78, 0,
-                4, 0, 24, 0, 99, 0, 105, 0, 115, 0, 99, 0, 111, 0, 108, 0, 97, 0, 98, 0, 46, 0, 99,
-                0, 111, 0, 109, 0, 3, 0, 42, 0, 112, 0, 111, 0, 115, 0, 101, 0, 105, 0, 100, 0,
-                111, 0, 110, 0, 46, 0, 99, 0, 105, 0, 115, 0, 99, 0, 111, 0, 108, 0, 97, 0, 98, 0,
-                46, 0, 99, 0, 111, 0, 109, 0, 0, 0, 0, 0,
+                67, 0, 73, 0, 83, 0, 67, 0, 79, 0, 76, 0, 65, 0, 66, 0, 2, 0, 16, 0, 67, 0, 73, 0,
+                83, 0, 67, 0, 79, 0, 76, 0, 65, 0, 66, 0, 1, 0, 16, 0, 80, 0, 79, 0, 83, 0, 69, 0,
+                73, 0, 68, 0, 79, 0, 78, 0, 4, 0, 24, 0, 99, 0, 105, 0, 115, 0, 99, 0, 111, 0, 108,
+                0, 97, 0, 98, 0, 46, 0, 99, 0, 111, 0, 109, 0, 3, 0, 42, 0, 112, 0, 111, 0, 115, 0,
+                101, 0, 105, 0, 100, 0, 111, 0, 110, 0, 46, 0, 99, 0, 105, 0, 115, 0, 99, 0, 111,
+                0, 108, 0, 97, 0, 98, 0, 46, 0, 99, 0, 111, 0, 109, 0, 0, 0, 0, 0,
             ][..],
         };
         let message = base64::decode(m).unwrap();
         let maybe_decoded_message =
             Challenge::deserialize::<nom::error::VerboseError<&[u8]>>(&message[..]);
         let (_, decoded_message) = maybe_decoded_message.unwrap();
-        assert_eq!(decoded_message, challenge_message);
+        pretty_assertions::assert_eq!(decoded_message, challenge_message);
+        eprintln!("target_name = {:?}", decoded_message.get_target_name());
+        eprintln!("target_info = {:?}", decoded_message.get_target_info());
     }
 
     #[test]
@@ -147,14 +157,13 @@ mod tests {
                 max_len: 118,
                 offset: 64,
             },
-            version: [67, 0, 73, 0, 83, 0, 67, 0],
             payload: &[
-                79, 0, 76, 0, 65, 0, 66, 0, 2, 0, 16, 0, 67, 0, 73, 0, 83, 0, 67, 0, 79, 0, 76, 0,
-                65, 0, 66, 0, 1, 0, 16, 0, 80, 0, 79, 0, 83, 0, 69, 0, 73, 0, 68, 0, 79, 0, 78, 0,
-                4, 0, 24, 0, 99, 0, 105, 0, 115, 0, 99, 0, 111, 0, 108, 0, 97, 0, 98, 0, 46, 0, 99,
-                0, 111, 0, 109, 0, 3, 0, 42, 0, 112, 0, 111, 0, 115, 0, 101, 0, 105, 0, 100, 0,
-                111, 0, 110, 0, 46, 0, 99, 0, 105, 0, 115, 0, 99, 0, 111, 0, 108, 0, 97, 0, 98, 0,
-                46, 0, 99, 0, 111, 0, 109, 0, 0, 0, 0, 0,
+                67, 0, 73, 0, 83, 0, 67, 0, 79, 0, 76, 0, 65, 0, 66, 0, 2, 0, 16, 0, 67, 0, 73, 0,
+                83, 0, 67, 0, 79, 0, 76, 0, 65, 0, 66, 0, 1, 0, 16, 0, 80, 0, 79, 0, 83, 0, 69, 0,
+                73, 0, 68, 0, 79, 0, 78, 0, 4, 0, 24, 0, 99, 0, 105, 0, 115, 0, 99, 0, 111, 0, 108,
+                0, 97, 0, 98, 0, 46, 0, 99, 0, 111, 0, 109, 0, 3, 0, 42, 0, 112, 0, 111, 0, 115, 0,
+                101, 0, 105, 0, 100, 0, 111, 0, 110, 0, 46, 0, 99, 0, 105, 0, 115, 0, 99, 0, 111,
+                0, 108, 0, 97, 0, 98, 0, 46, 0, 99, 0, 111, 0, 109, 0, 0, 0, 0, 0,
             ][..],
         };
         pretty_assertions::assert_eq!(base64::encode(challenge_message.serialize()), m);

@@ -34,11 +34,11 @@ impl<'a> Wire<'a> for Challenge<'a> {
         written += write_u32(writer, self.negociate_flags)?;
         written += write_u64(writer, self.server_challenge)?;
         written += write_u64(writer, 0)?;
+        written += self.target_info.serialize_into(writer)?;
         written += self.version.len();
         writer.write_all(&self.version[..])?;
-        written += self.target_info.serialize_into(writer)?;
-        writer.write_all(self.payload)?;
         debug_assert_eq!(written, Self::header_size());
+        writer.write_all(self.payload)?;
         written += self.payload.len();
 
         Ok(written)
@@ -100,19 +100,63 @@ mod tests {
 
     #[test]
     fn decode() {
-        let m = "TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAFASgKAAAADw==";
-        let challenge_message = Challenge::default();
+        let m = "TlRMTVNTUAACAAAAEAAQADAAAAAFgominWXBG0VA2i4AAAAAAAAAAHYAdgBAAAAAQwBJAFMAQwBPAEwAQQBCAAIAEABDAEkAUwBDAE8ATABBAEIAAQAQAFAATwBTAEUASQBEAE8ATgAEABgAYwBpAHMAYwBvAGwAYQBiAC4AYwBvAG0AAwAqAHAAbwBzAGUAaQBkAG8AbgAuAGMAaQBzAGMAbwBsAGEAYgAuAGMAbwBtAAAAAAA=";
+        let challenge_message = Challenge {
+            target_name: Fields {
+                len: 16,
+                max_len: 16,
+                offset: 48,
+            },
+            negociate_flags: 2726920709,
+            server_challenge: 3376081536230188445,
+            target_info: Fields {
+                len: 118,
+                max_len: 118,
+                offset: 64,
+            },
+            version: [67, 0, 73, 0, 83, 0, 67, 0],
+            payload: &[
+                79, 0, 76, 0, 65, 0, 66, 0, 2, 0, 16, 0, 67, 0, 73, 0, 83, 0, 67, 0, 79, 0, 76, 0,
+                65, 0, 66, 0, 1, 0, 16, 0, 80, 0, 79, 0, 83, 0, 69, 0, 73, 0, 68, 0, 79, 0, 78, 0,
+                4, 0, 24, 0, 99, 0, 105, 0, 115, 0, 99, 0, 111, 0, 108, 0, 97, 0, 98, 0, 46, 0, 99,
+                0, 111, 0, 109, 0, 3, 0, 42, 0, 112, 0, 111, 0, 115, 0, 101, 0, 105, 0, 100, 0,
+                111, 0, 110, 0, 46, 0, 99, 0, 105, 0, 115, 0, 99, 0, 111, 0, 108, 0, 97, 0, 98, 0,
+                46, 0, 99, 0, 111, 0, 109, 0, 0, 0, 0, 0,
+            ][..],
+        };
         let message = base64::decode(m).unwrap();
         let maybe_decoded_message =
             Challenge::deserialize::<nom::error::VerboseError<&[u8]>>(&message[..]);
         let (_, decoded_message) = maybe_decoded_message.unwrap();
-        pretty_assertions::assert_eq!(decoded_message, challenge_message);
+        assert_eq!(decoded_message, challenge_message);
     }
 
     #[test]
     fn encode() {
-        let m = "TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAFASgKAAAADw==";
-        let challenge_message = Challenge::default();
+        let m = "TlRMTVNTUAACAAAAEAAQADAAAAAFgominWXBG0VA2i4AAAAAAAAAAHYAdgBAAAAAQwBJAFMAQwBPAEwAQQBCAAIAEABDAEkAUwBDAE8ATABBAEIAAQAQAFAATwBTAEUASQBEAE8ATgAEABgAYwBpAHMAYwBvAGwAYQBiAC4AYwBvAG0AAwAqAHAAbwBzAGUAaQBkAG8AbgAuAGMAaQBzAGMAbwBsAGEAYgAuAGMAbwBtAAAAAAA=";
+        let challenge_message = Challenge {
+            target_name: Fields {
+                len: 16,
+                max_len: 16,
+                offset: 48,
+            },
+            negociate_flags: 2726920709,
+            server_challenge: 3376081536230188445,
+            target_info: Fields {
+                len: 118,
+                max_len: 118,
+                offset: 64,
+            },
+            version: [67, 0, 73, 0, 83, 0, 67, 0],
+            payload: &[
+                79, 0, 76, 0, 65, 0, 66, 0, 2, 0, 16, 0, 67, 0, 73, 0, 83, 0, 67, 0, 79, 0, 76, 0,
+                65, 0, 66, 0, 1, 0, 16, 0, 80, 0, 79, 0, 83, 0, 69, 0, 73, 0, 68, 0, 79, 0, 78, 0,
+                4, 0, 24, 0, 99, 0, 105, 0, 115, 0, 99, 0, 111, 0, 108, 0, 97, 0, 98, 0, 46, 0, 99,
+                0, 111, 0, 109, 0, 3, 0, 42, 0, 112, 0, 111, 0, 115, 0, 101, 0, 105, 0, 100, 0,
+                111, 0, 110, 0, 46, 0, 99, 0, 105, 0, 115, 0, 99, 0, 111, 0, 108, 0, 97, 0, 98, 0,
+                46, 0, 99, 0, 111, 0, 109, 0, 0, 0, 0, 0,
+            ][..],
+        };
         pretty_assertions::assert_eq!(base64::encode(challenge_message.serialize()), m);
     }
 

@@ -8,3 +8,6 @@ edition = "2021"
 [dependencies]
 base64 = "0.13"
 nom = "7"
+
+[dev-dependencies]
+pretty_assertions = "1"

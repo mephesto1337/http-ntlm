@@ -1,7 +1,7 @@
 use nom::bytes::complete::{tag, take};
 use nom::combinator::verify;
 use nom::error::context;
-use nom::number::complete::{be_u32, be_u64};
+use nom::number::complete::{le_u32, le_u64};
 use nom::sequence::{preceded, tuple};
 
 use super::{
@@ -34,8 +34,11 @@ impl<'a> Wire<'a> for Challenge<'a> {
         written += write_u32(writer, self.negociate_flags)?;
         written += write_u64(writer, self.server_challenge)?;
         written += write_u64(writer, 0)?;
+        written += self.version.len();
+        writer.write_all(&self.version[..])?;
         written += self.target_info.serialize_into(writer)?;
         writer.write_all(self.payload)?;
+        debug_assert_eq!(written, Self::header_size());
         written += self.payload.len();
 
         Ok(written)
@@ -60,12 +63,12 @@ impl<'a> Wire<'a> for Challenge<'a> {
         ) = context(
             "Challenge",
             preceded(
-                tuple((tag(SIGNATURE), verify(be_u32, |mt| *mt == MESSAGE_TYPE))),
+                tuple((tag(SIGNATURE), verify(le_u32, |mt| *mt == MESSAGE_TYPE))),
                 tuple((
                     Fields::deserialize,
-                    be_u32,
-                    be_u64,
-                    verify(be_u64, |reserved| *reserved == 0),
+                    le_u32,
+                    le_u64,
+                    verify(le_u64, |reserved| *reserved == 0),
                     Fields::deserialize,
                     take(std::mem::size_of_val(&version)),
                 )),
@@ -85,6 +88,10 @@ impl<'a> Wire<'a> for Challenge<'a> {
             },
         ))
     }
+
+    fn header_size() -> usize {
+        56
+    }
 }
 
 #[cfg(test)]
@@ -92,11 +99,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn challenge_message() {
-        let m = "yNY3lb6a0L6vVQEZNqwQn0s8UNew33KdKZvG+Onv";
-        let message = base64::decode_config(m, base64::STANDARD).unwrap();
-        let (_, decoded_message) =
-            Challenge::deserialize::<nom::error::VerboseError<&[u8]>>(&message[..]).unwrap();
-        assert_eq!(decoded_message, Challenge::default());
+    fn decode() {
+        let m = "TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAFASgKAAAADw==";
+        let challenge_message = Challenge::default();
+        let message = base64::decode(m).unwrap();
+        let maybe_decoded_message =
+            Challenge::deserialize::<nom::error::VerboseError<&[u8]>>(&message[..]);
+        let (_, decoded_message) = maybe_decoded_message.unwrap();
+        pretty_assertions::assert_eq!(decoded_message, challenge_message);
+    }
+
+    #[test]
+    fn encode() {
+        let m = "TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAFASgKAAAADw==";
+        let challenge_message = Challenge::default();
+        pretty_assertions::assert_eq!(base64::encode(challenge_message.serialize()), m);
+    }
+
+    #[test]
+    fn encode_decode() {
+        let m1 = Challenge::default();
+        eprintln!("m1 = {:#x?}", m1);
+        let ser = m1.serialize();
+        let (rest, m2) = Challenge::deserialize::<nom::error::VerboseError<_>>(&ser[..]).unwrap();
+        eprintln!("m2 = {:#x?}", m2);
+        pretty_assertions::assert_eq!(rest.len(), 0);
+        pretty_assertions::assert_eq!(m1, m2);
     }
 }

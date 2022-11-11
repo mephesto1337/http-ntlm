@@ -1,13 +1,13 @@
 use super::Wire;
 
 use nom::error::context;
-use nom::number::complete::{be_u16, be_u32};
+use nom::number::complete::{le_u16, le_u32};
 use nom::sequence::tuple;
 
 macro_rules! write_integer {
     ($name:ident, $type:ty) => {
         pub(super) fn $name(writer: &mut impl std::io::Write, n: $type) -> std::io::Result<usize> {
-            let bytes = n.to_be_bytes();
+            let bytes = n.to_le_bytes();
             writer.write_all(&bytes[..])?;
             Ok(bytes.len())
         }
@@ -40,7 +40,7 @@ impl<'a> Wire<'a> for Fields {
         E: super::NomError<'a>,
     {
         let (rest, (len, max_len, offset)) =
-            context("Fields", tuple((be_u16, be_u16, be_u32)))(input)?;
+            context("Fields", tuple((le_u16, le_u16, le_u32)))(input)?;
 
         Ok((
             rest,
@@ -50,5 +50,9 @@ impl<'a> Wire<'a> for Fields {
                 offset,
             },
         ))
+    }
+
+    fn header_size() -> usize {
+        8
     }
 }

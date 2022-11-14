@@ -30,5 +30,6 @@ const SIGNATURE: &'static [u8; 8] = b"NTLMSSP\0";
 pub mod authenticate;
 pub mod challenge;
 pub mod negociate;
+mod structures;
 mod unicode_string;
 mod utils;

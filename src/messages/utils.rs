@@ -1,3 +1,5 @@
+use std::io;
+
 use super::Wire;
 
 use nom::error::context;
@@ -55,5 +57,17 @@ impl<'a> Wire<'a> for Fields {
 
     fn header_size() -> usize {
         8
+    }
+}
+
+pub struct DevNull;
+
+impl io::Write for DevNull {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
     }
 }

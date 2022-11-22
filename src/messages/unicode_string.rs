@@ -76,10 +76,6 @@ impl<'a> Wire<'a> for UnicodeString {
         self.0.serialize_into(writer)
     }
 
-    fn header_size() -> usize {
-        0
-    }
-
     fn deserialize<E>(input: &'a [u8]) -> nom::IResult<&'a [u8], Self, E>
     where
         E: super::NomError<'a>,
@@ -98,10 +94,6 @@ impl<'a> Wire<'a> for String {
             size += write_u16(writer, b)?;
         }
         Ok(size)
-    }
-
-    fn header_size() -> usize {
-        0
     }
 
     fn deserialize<E>(input: &'a [u8]) -> nom::IResult<&'a [u8], Self, E>

@@ -56,10 +56,6 @@ impl<'a> Wire<'a> for Fields {
             },
         ))
     }
-
-    fn header_size() -> usize {
-        8
-    }
 }
 
 impl Fields {

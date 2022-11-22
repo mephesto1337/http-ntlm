@@ -50,10 +50,6 @@ impl<'a> Wire<'a> for FileTime {
         Ok(written)
     }
 
-    fn header_size() -> usize {
-        std::mem::size_of::<u32>() * 2
-    }
-
     fn deserialize<E>(input: &'a [u8]) -> nom::IResult<&'a [u8], Self, E>
     where
         E: crate::messages::NomError<'a>,

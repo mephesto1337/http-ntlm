@@ -58,7 +58,7 @@ impl<'a> Wire<'a> for Challenge<'a> {
         written += write_u64(writer, 0)?;
         written += self.target_infos_field.serialize_into(writer)?;
 
-        debug_assert_eq!(written, Self::header_size());
+        debug_assert_eq!(written, 48);
         writer.write_all(self.payload)?;
         written += self.payload.len();
 
@@ -118,10 +118,6 @@ impl<'a> Wire<'a> for Challenge<'a> {
                 payload,
             },
         ))
-    }
-
-    fn header_size() -> usize {
-        48
     }
 }
 

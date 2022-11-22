@@ -31,10 +31,6 @@ impl<'a> Wire<'a> for SingleHostData {
         Ok(written)
     }
 
-    fn header_size() -> usize {
-        48
-    }
-
     fn deserialize<E>(input: &'a [u8]) -> nom::IResult<&'a [u8], Self, E>
     where
         E: crate::messages::NomError<'a>,
@@ -63,5 +59,15 @@ impl<'a> Wire<'a> for SingleHostData {
                 machine_id,
             },
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn size() {
+        assert_eq!(std::mem::size_of::<SingleHostData>(), 48);
     }
 }

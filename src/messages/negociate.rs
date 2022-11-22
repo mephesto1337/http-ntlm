@@ -51,7 +51,7 @@ impl<'a> Wire<'a> for Negociate<'a> {
         written += write_u32(writer, self.negociate_flags)?;
         written += self.domain_name_field.serialize_into(writer)?;
         written += self.workstation_field.serialize_into(writer)?;
-        debug_assert_eq!(written, Self::header_size());
+        debug_assert_eq!(written, 32);
 
         writer.write_all(self.payload)?;
         written += self.payload.len();
@@ -88,10 +88,6 @@ impl<'a> Wire<'a> for Negociate<'a> {
                 payload,
             },
         ))
-    }
-
-    fn header_size() -> usize {
-        32
     }
 }
 

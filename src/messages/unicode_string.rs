@@ -3,7 +3,7 @@ use std::io;
 use std::ops::{Deref, DerefMut};
 use std::string::FromUtf16Error;
 
-use nom::combinator::{map_opt, opt, verify};
+use nom::combinator::{map, map_opt, opt, verify};
 use nom::error::context;
 use nom::multi::fold_many0;
 use nom::number::complete::le_u16;
@@ -73,8 +73,28 @@ impl<'a> Wire<'a> for UnicodeString {
     where
         W: io::Write,
     {
+        self.0.serialize_into(writer)
+    }
+
+    fn header_size() -> usize {
+        0
+    }
+
+    fn deserialize<E>(input: &'a [u8]) -> nom::IResult<&'a [u8], Self, E>
+    where
+        E: super::NomError<'a>,
+    {
+        map(String::deserialize, |s| Self(s))(input)
+    }
+}
+
+impl<'a> Wire<'a> for String {
+    fn serialize_into<W>(&self, writer: &mut W) -> io::Result<usize>
+    where
+        W: io::Write,
+    {
         let mut size = 0;
-        for b in self.0.encode_utf16() {
+        for b in self.encode_utf16() {
             size += write_u16(writer, b)?;
         }
         Ok(size)
@@ -88,7 +108,7 @@ impl<'a> Wire<'a> for UnicodeString {
     where
         E: super::NomError<'a>,
     {
-        let (rest, s) = context(
+        context(
             "UTF-16 string",
             terminated(
                 fold_many0(
@@ -107,8 +127,6 @@ impl<'a> Wire<'a> for UnicodeString {
                 ),
                 opt(verify(le_u16, |b| *b == 0)),
             ),
-        )(input)?;
-
-        Ok((rest, Self(s)))
+        )(input)
     }
 }

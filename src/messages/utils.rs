@@ -1,7 +1,9 @@
 use std::io;
+use std::ops::Range;
 
-use super::Wire;
+use super::{NomError, Wire};
 
+use nom::combinator::opt;
 use nom::error::context;
 use nom::number::complete::{le_u16, le_u32};
 use nom::sequence::tuple;
@@ -57,6 +59,27 @@ impl<'a> Wire<'a> for Fields {
 
     fn header_size() -> usize {
         8
+    }
+}
+
+impl Fields {
+    pub(crate) fn get_range(&self) -> Range<usize> {
+        let start = self.offset as usize;
+        let end = start + self.len as usize;
+        start..end
+    }
+
+    pub(super) fn get_data<'a, T, E>(&self, input: &'a [u8]) -> nom::IResult<&'a [u8], Option<T>, E>
+    where
+        E: NomError<'a>,
+        T: Wire<'a>,
+    {
+        if self.len == 0 {
+            Ok((input, None))
+        } else {
+            let data = &input[self.get_range()];
+            context("Fields::get_data", opt(T::deserialize))(data)
+        }
     }
 }
 

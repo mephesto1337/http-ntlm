@@ -1,3 +1,5 @@
+use std::fmt;
+
 use nom::bytes::complete::tag;
 use nom::combinator::verify;
 use nom::error::context;
@@ -11,12 +13,24 @@ use super::{
 
 const MESSAGE_TYPE: u32 = 0x00000001;
 
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, PartialEq, Eq)]
 pub struct Negociate<'a> {
     pub negociate_flags: u32,
-    pub domain_name: Fields,
-    pub workstation: Fields,
+    pub domain_name_field: Fields,
+    pub domain_name: Option<String>,
+    pub workstation_field: Fields,
+    pub workstation: Option<String>,
     pub payload: &'a [u8],
+}
+
+impl fmt::Debug for Negociate<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Negociate")
+            .field("negociate_flags", &self.negociate_flags)
+            .field("domain_name", &self.domain_name)
+            .field("workstation", &self.workstation)
+            .finish()
+    }
 }
 
 impl<'a> Negociate<'a> {
@@ -35,8 +49,8 @@ impl<'a> Wire<'a> for Negociate<'a> {
         written += SIGNATURE.len();
         written += write_u32(writer, MESSAGE_TYPE)?;
         written += write_u32(writer, self.negociate_flags)?;
-        written += self.domain_name.serialize_into(writer)?;
-        written += self.workstation.serialize_into(writer)?;
+        written += self.domain_name_field.serialize_into(writer)?;
+        written += self.workstation_field.serialize_into(writer)?;
         debug_assert_eq!(written, Self::header_size());
 
         writer.write_all(self.payload)?;
@@ -49,7 +63,7 @@ impl<'a> Wire<'a> for Negociate<'a> {
     where
         E: super::NomError<'a>,
     {
-        let (payload, (negociate_flags, domain_name, workstation)) = context(
+        let (payload, (negociate_flags, domain_name_field, workstation_field)) = context(
             "Negociate",
             preceded(
                 tuple((
@@ -60,11 +74,16 @@ impl<'a> Wire<'a> for Negociate<'a> {
             ),
         )(input)?;
 
+        let (_rest, domain_name) = domain_name_field.get_data(input)?;
+        let (_rest, workstation) = workstation_field.get_data(input)?;
+
         Ok((
             &b""[..],
             Self {
                 negociate_flags,
+                domain_name_field,
                 domain_name,
+                workstation_field,
                 workstation,
                 payload,
             },
@@ -84,16 +103,18 @@ mod tests {
     fn decode() {
         let negociate_message = Negociate {
             negociate_flags: 0xa2088207,
-            domain_name: Fields {
+            domain_name_field: Fields {
                 len: 0,
                 max_len: 0,
                 offset: 0,
             },
-            workstation: Fields {
+            domain_name: None,
+            workstation_field: Fields {
                 len: 0,
                 max_len: 0,
                 offset: 0,
             },
+            workstation: None,
             payload: &[0x05, 0x01, 0x28, 0x0a, 0x00, 0x00, 0x00, 0x0f][..],
         };
         let m = "TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAFASgKAAAADw==";
@@ -109,16 +130,18 @@ mod tests {
     fn encode() {
         let negociate_message = Negociate {
             negociate_flags: 0xa2088207,
-            domain_name: Fields {
+            domain_name_field: Fields {
                 len: 0,
                 max_len: 0,
                 offset: 0,
             },
-            workstation: Fields {
+            domain_name: None,
+            workstation_field: Fields {
                 len: 0,
                 max_len: 0,
                 offset: 0,
             },
+            workstation: None,
             payload: &[0x05, 0x01, 0x28, 0x0a, 0x00, 0x00, 0x00, 0x0f][..],
         };
         let m = "TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAFASgKAAAADw==";

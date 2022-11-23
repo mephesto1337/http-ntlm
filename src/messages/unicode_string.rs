@@ -33,6 +33,12 @@ impl From<String> for UnicodeString {
     }
 }
 
+impl From<&str> for UnicodeString {
+    fn from(s: &str) -> Self {
+        Self(s.to_owned())
+    }
+}
+
 impl From<UnicodeString> for String {
     fn from(s: UnicodeString) -> Self {
         s.into_inner()

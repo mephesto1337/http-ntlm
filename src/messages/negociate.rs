@@ -6,24 +6,23 @@ use nom::error::context;
 use nom::number::complete::le_u32;
 use nom::sequence::{preceded, tuple};
 
-use super::{
-    utils::{write_u32, Fields},
-    Wire, SIGNATURE,
+use crate::messages::{
+    flags::{self, Flags},
+    utils::write_u32,
+    Field, Version, Wire, SIGNATURE,
 };
 
 const MESSAGE_TYPE: u32 = 0x00000001;
 
 #[derive(Default, PartialEq, Eq)]
-pub struct Negociate<'a> {
-    pub negociate_flags: u32,
-    pub domain_name_field: Fields,
+pub struct Negociate {
+    pub negociate_flags: Flags,
     pub domain_name: Option<String>,
-    pub workstation_field: Fields,
     pub workstation: Option<String>,
-    pub payload: &'a [u8],
+    pub version: Version,
 }
 
-impl fmt::Debug for Negociate<'_> {
+impl fmt::Debug for Negociate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Negociate")
             .field("negociate_flags", &self.negociate_flags)
@@ -33,28 +32,29 @@ impl fmt::Debug for Negociate<'_> {
     }
 }
 
-impl<'a> Negociate<'a> {
-    pub fn version(&'a self) -> &'a [u8] {
-        &self.payload[..8]
-    }
-}
-
-impl<'a> Wire<'a> for Negociate<'a> {
+impl<'a> Wire<'a> for Negociate {
     fn serialize_into<W>(&self, writer: &mut W) -> std::io::Result<usize>
     where
         W: std::io::Write,
     {
+        const PAYLOAD_OFFSET: usize = 32;
+
+        let mut payload = Vec::with_capacity(PAYLOAD_OFFSET * 2);
+        payload.resize(PAYLOAD_OFFSET, 0);
+
+        payload.extend_from_slice(&self.version);
         let mut written = 0;
         writer.write_all(&SIGNATURE[..])?;
         written += SIGNATURE.len();
         written += write_u32(writer, MESSAGE_TYPE)?;
-        written += write_u32(writer, self.negociate_flags)?;
-        written += self.domain_name_field.serialize_into(writer)?;
-        written += self.workstation_field.serialize_into(writer)?;
-        debug_assert_eq!(written, 32);
+        written += self.negociate_flags.serialize_into(writer)?;
+        written += Field::append(self.domain_name.as_ref(), &mut payload, writer)?;
+        written += Field::append(self.workstation.as_ref(), &mut payload, writer)?;
 
-        writer.write_all(self.payload)?;
-        written += self.payload.len();
+        assert_eq!(written, PAYLOAD_OFFSET);
+
+        writer.write_all(&payload[PAYLOAD_OFFSET..])?;
+        written += payload.len();
 
         Ok(written)
     }
@@ -63,29 +63,38 @@ impl<'a> Wire<'a> for Negociate<'a> {
     where
         E: super::NomError<'a>,
     {
-        let (payload, (negociate_flags, domain_name_field, workstation_field)) = context(
-            "Negociate",
-            preceded(
-                tuple((
-                    tag(SIGNATURE),
-                    verify(le_u32, |mt| dbg!(*mt) == MESSAGE_TYPE),
-                )),
-                tuple((le_u32, Fields::deserialize, Fields::deserialize)),
-            ),
-        )(input)?;
+        let (_rest, (negociate_flags, domain_name_field, workstation_field, version)) =
+            context(
+                "Negociate",
+                preceded(
+                    tuple((tag(SIGNATURE), verify(le_u32, |mt| *mt == MESSAGE_TYPE))),
+                    tuple((
+                        Flags::deserialize,
+                        Field::deserialize,
+                        Field::deserialize,
+                        Version::deserialize,
+                    )),
+                ),
+            )(input)?;
 
-        let (_rest, domain_name) = domain_name_field.get_data(input)?;
-        let (_rest, workstation) = workstation_field.get_data(input)?;
+        let domain_name = domain_name_field.get_data_if(
+            "domain",
+            input,
+            negociate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_OEM_DOMAIN_SUPPLIED),
+        )?;
+        let workstation = workstation_field.get_data_if(
+            "workstation",
+            input,
+            negociate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_OEM_WORKSTATION_SUPPLIED),
+        )?;
 
         Ok((
             &b""[..],
             Self {
                 negociate_flags,
-                domain_name_field,
                 domain_name,
-                workstation_field,
                 workstation,
-                payload,
+                version,
             },
         ))
     }
@@ -98,20 +107,10 @@ mod tests {
     #[test]
     fn decode() {
         let negociate_message = Negociate {
-            negociate_flags: 0xa2088207,
-            domain_name_field: Fields {
-                len: 0,
-                max_len: 0,
-                offset: 0,
-            },
+            negociate_flags: Flags(0xa2088207),
             domain_name: None,
-            workstation_field: Fields {
-                len: 0,
-                max_len: 0,
-                offset: 0,
-            },
             workstation: None,
-            payload: &[0x05, 0x01, 0x28, 0x0a, 0x00, 0x00, 0x00, 0x0f][..],
+            version: Version::from([0x05, 0x01, 0x28, 0x0a, 0x00, 0x00, 0x00, 0x0f]),
         };
         let m = "TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAFASgKAAAADw==";
         let message = base64::decode(m).unwrap();
@@ -125,31 +124,15 @@ mod tests {
     #[test]
     fn encode() {
         let negociate_message = Negociate {
-            negociate_flags: 0xa2088207,
-            domain_name_field: Fields {
-                len: 0,
-                max_len: 0,
-                offset: 0,
-            },
+            negociate_flags: Flags(0xa2088207),
             domain_name: None,
-            workstation_field: Fields {
-                len: 0,
-                max_len: 0,
-                offset: 0,
-            },
             workstation: None,
-            payload: &[0x05, 0x01, 0x28, 0x0a, 0x00, 0x00, 0x00, 0x0f][..],
+            version: Version::from([0x05, 0x01, 0x28, 0x0a, 0x00, 0x00, 0x00, 0x0f]),
         };
-        let m = "TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAFASgKAAAADw==";
-        pretty_assertions::assert_eq!(base64::encode(negociate_message.serialize()), m);
-    }
-
-    #[test]
-    fn encode_decode() {
-        let m1 = Negociate::default();
-        let ser = m1.serialize();
-        let (rest, m2) = Negociate::deserialize::<nom::error::VerboseError<_>>(&ser[..]).unwrap();
-        pretty_assertions::assert_eq!(rest.len(), 0);
-        pretty_assertions::assert_eq!(m1, m2);
+        let ser = negociate_message.serialize();
+        pretty_assertions::assert_eq!(
+            negociate_message,
+            Negociate::deserialize::<()>(&ser[..]).unwrap().1
+        );
     }
 }

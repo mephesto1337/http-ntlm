@@ -1,6 +1,7 @@
 use std::io;
 use std::mem::size_of_val;
 
+use nom::branch::alt;
 use nom::bytes::complete::take;
 use nom::combinator::map;
 use nom::error::context;
@@ -46,7 +47,7 @@ impl<'a> Wire<'a> for Lmv2Challenge {
     {
         writer.write_all(&self.response[..])?;
         writer.write_all(&self.challenge_from_client[..])?;
-        Ok(size_of_val(&self))
+        Ok(self.response.len() + self.challenge_from_client.len())
     }
 
     fn deserialize<E>(input: &'a [u8]) -> nom::IResult<&'a [u8], Self, E>
@@ -85,7 +86,7 @@ pub enum LmChallenge {
 
 impl Default for LmChallenge {
     fn default() -> Self {
-        Self::V1(Default::default())
+        Self::V2(Default::default())
     }
 }
 
@@ -116,7 +117,10 @@ impl<'a> Wire<'a> for LmChallenge {
     where
         E: NomError<'a>,
     {
-        map(Lmv1Challenge::deserialize, |c| Self::V1(c))(input)
+        alt((
+            map(Lmv2Challenge::deserialize, |c| Self::V2(c)),
+            map(Lmv1Challenge::deserialize, |c| Self::V1(c)),
+        ))(input)
     }
 }
 

@@ -1,6 +1,7 @@
 use std::io;
 use std::mem::size_of_val;
 
+use nom::branch::alt;
 use nom::bytes::complete::take;
 use nom::combinator::{map, verify};
 use nom::error::context;
@@ -108,7 +109,7 @@ pub enum NtChallenge {
 
 impl Default for NtChallenge {
     fn default() -> Self {
-        Self::V1(Default::default())
+        Self::V2(Default::default())
     }
 }
 
@@ -139,7 +140,10 @@ impl<'a> Wire<'a> for NtChallenge {
     where
         E: NomError<'a>,
     {
-        map(Ntv1Challenge::deserialize, |c| Self::V1(c))(input)
+        alt((
+            map(Ntv2Challenge::deserialize, |c| Self::V2(c)),
+            map(Ntv1Challenge::deserialize, |c| Self::V1(c)),
+        ))(input)
     }
 }
 

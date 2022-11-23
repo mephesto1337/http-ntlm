@@ -187,54 +187,63 @@ impl Flags {
         debug_assert!(bit <= 31);
         self.0 & (1 << bit) != 0
     }
+
+    pub fn set_flag(&mut self, bit: u32) {
+        debug_assert!(bit <= 31);
+        self.0 |= 1 << bit;
+    }
+
+    pub fn clear_flag(&mut self, bit: u32) {
+        debug_assert!(bit <= 31);
+        self.0 &= u32::MAX & !(1 << bit);
+    }
+
     fn validate(flags: &u32) -> bool {
         let flags = Self(*flags);
-        eprintln!("flags = {:032b}", flags.0);
-        eprintln!("flags = {:?}", flags);
 
         if flags.has_flag(R1) {
-            eprintln!("flags.has_flag(R1)");
+            log::warn!("flags.has_flag(R1)");
             return false;
         }
         if flags.has_flag(R2) {
-            eprintln!("flags.has_flag(R2)");
+            log::warn!("flags.has_flag(R2)");
             return false;
         }
         if flags.has_flag(R3) {
-            eprintln!("flags.has_flag(R3)");
+            log::warn!("flags.has_flag(R3)");
             return false;
         }
         if flags.has_flag(R4) {
-            eprintln!("flags.has_flag(R4)");
+            log::warn!("flags.has_flag(R4)");
             return false;
         }
         if flags.has_flag(R5) {
-            eprintln!("flags.has_flag(R5)");
+            log::warn!("flags.has_flag(R5)");
             return false;
         }
         if flags.has_flag(R6) {
-            eprintln!("flags.has_flag(R6)");
+            log::warn!("flags.has_flag(R6)");
             return false;
         }
         if flags.has_flag(R7) {
-            eprintln!("flags.has_flag(R7)");
+            log::warn!("flags.has_flag(R7)");
             return false;
         }
         if flags.has_flag(R8) {
-            eprintln!("flags.has_flag(R8)");
+            log::warn!("flags.has_flag(R8)");
             return false;
         }
         if flags.has_flag(R9) {
-            eprintln!("flags.has_flag(R9)");
+            log::warn!("flags.has_flag(R9)");
             // return false;
         }
         if flags.has_flag(R10) {
-            eprintln!("flags.has_flag(R10)");
+            log::warn!("flags.has_flag(R10)");
             return false;
         }
 
         if !flags.has_flag(NTLMSSP_NEGOTIATE_UNICODE) && !flags.has_flag(NTLM_NEGOTIATE_OEM) {
-            eprintln!("!flags.has_flag(NTLMSSP_NEGOTIATE_UNICODE) && !flags.has_flag(NTLM_NEGOTIATE_OEM) ");
+            log::warn!("!flags.has_flag(NTLMSSP_NEGOTIATE_UNICODE) && !flags.has_flag(NTLM_NEGOTIATE_OEM) ");
             return false;
         }
 

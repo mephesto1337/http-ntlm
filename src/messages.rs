@@ -1,9 +1,12 @@
 use std::io::{self, Write};
 
-trait NomError<'a>: nom::error::ContextError<&'a [u8]> + nom::error::ParseError<&'a [u8]> {}
+trait NomError<'a>:
+    nom::error::ContextError<&'a [u8]> + nom::error::ParseError<&'a [u8]> + std::fmt::Debug
+{
+}
 
 impl<'a, E> NomError<'a> for E where
-    E: nom::error::ParseError<&'a [u8]> + nom::error::ContextError<&'a [u8]>
+    E: nom::error::ParseError<&'a [u8]> + nom::error::ContextError<&'a [u8]> + std::fmt::Debug
 {
 }
 
@@ -50,8 +53,13 @@ const SIGNATURE: &'static [u8; 8] = b"NTLMSSP\0";
 
 pub mod authenticate;
 pub mod challenge;
+mod field;
 pub mod flags;
 pub mod negociate;
 mod structures;
 mod unicode_string;
 mod utils;
+mod version;
+
+pub use field::Field;
+pub use version::Version;

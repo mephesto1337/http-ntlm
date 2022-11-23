@@ -5,7 +5,7 @@ mod single_host_data;
 pub use single_host_data::SingleHostData;
 
 mod avid;
-pub use avid::AvPair;
+pub use avid::{AvPair, MsvAvFlags};
 
 mod lm_challenge;
 pub use lm_challenge::{LmChallenge, Lmv1Challenge, Lmv2Challenge};

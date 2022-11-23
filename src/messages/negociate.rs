@@ -14,12 +14,62 @@ use crate::messages::{
 
 const MESSAGE_TYPE: u32 = 0x00000001;
 
-#[derive(Default, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct Negociate {
     pub negociate_flags: Flags,
-    pub domain_name: Option<String>,
-    pub workstation: Option<String>,
+    domain_name: Option<String>,
+    workstation: Option<String>,
     pub version: Version,
+}
+
+impl Negociate {
+    pub fn set_domain_name(&mut self, domain_name: Option<String>) -> &mut Self {
+        self.domain_name = domain_name;
+        if self.domain_name.is_some() {
+            self.negociate_flags
+                .set_flag(flags::NTLMSSP_NEGOTIATE_OEM_DOMAIN_SUPPLIED);
+        } else {
+            self.negociate_flags
+                .clear_flag(flags::NTLMSSP_NEGOTIATE_OEM_DOMAIN_SUPPLIED);
+        }
+        self
+    }
+
+    pub fn get_domain_name(&self) -> Option<&String> {
+        self.domain_name.as_ref()
+    }
+
+    pub fn set_workstation(&mut self, workstation: Option<String>) -> &mut Self {
+        self.workstation = workstation;
+        if self.workstation.is_some() {
+            self.negociate_flags
+                .set_flag(flags::NTLMSSP_NEGOTIATE_OEM_WORKSTATION_SUPPLIED);
+        } else {
+            self.negociate_flags
+                .clear_flag(flags::NTLMSSP_NEGOTIATE_OEM_WORKSTATION_SUPPLIED);
+        }
+        self
+    }
+
+    pub fn get_workstation(&self) -> Option<&String> {
+        self.workstation.as_ref()
+    }
+}
+
+impl Default for Negociate {
+    fn default() -> Self {
+        let mut negociate_flags = Flags::default();
+        negociate_flags.set_flag(flags::NTLMSSP_REQUEST_NON_NT_SESSION_KEY);
+        negociate_flags.set_flag(flags::NTLMSSP_TARGET_TYPE_DOMAIN);
+        negociate_flags.set_flag(flags::NTLMSSP_REQUEST_TARGET);
+
+        Self {
+            negociate_flags,
+            domain_name: None,
+            workstation: None,
+            version: Default::default(),
+        }
+    }
 }
 
 impl fmt::Debug for Negociate {
@@ -107,12 +157,13 @@ mod tests {
     #[test]
     fn decode() {
         let negociate_message = Negociate {
-            negociate_flags: Flags(0xa2088207),
-            domain_name: None,
-            workstation: None,
-            version: Version::from([0x05, 0x01, 0x28, 0x0a, 0x00, 0x00, 0x00, 0x0f]),
+            negociate_flags: Flags(0xa20c8207),
+            domain_name: Some("CONTOSIO".into()),
+            workstation: Some("PC1".into()),
+            version: Version::default(),
         };
-        let m = "TlRMTVNTUAABAAAAB4IIogAAAAAAAAAAAAAAAAAAAAAFASgKAAAADw==";
+        let m =
+            "TlRMTVNTUAABAAAAB4IMohAAEAAoAAAABgAGADgAAAAAAAAAAAAAAEMATwBOAFQATwBTAEkATwBQAEMAMQA=";
         let message = base64::decode(m).unwrap();
         let maybe_decoded_message =
             Negociate::deserialize::<nom::error::VerboseError<&[u8]>>(&message[..]);
@@ -124,12 +175,13 @@ mod tests {
     #[test]
     fn encode() {
         let negociate_message = Negociate {
-            negociate_flags: Flags(0xa2088207),
-            domain_name: None,
-            workstation: None,
-            version: Version::from([0x05, 0x01, 0x28, 0x0a, 0x00, 0x00, 0x00, 0x0f]),
+            negociate_flags: Flags(0xa20c8207),
+            domain_name: Some("CONTOSIO".into()),
+            workstation: Some("PC1".into()),
+            version: Version::default(),
         };
         let ser = negociate_message.serialize();
+        eprintln!("b64: {}", base64::encode(&ser[..]));
         pretty_assertions::assert_eq!(
             negociate_message,
             Negociate::deserialize::<()>(&ser[..]).unwrap().1

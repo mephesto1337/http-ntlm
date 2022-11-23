@@ -118,8 +118,8 @@ impl<'a> Wire<'a> for LmChallenge {
         E: NomError<'a>,
     {
         alt((
-            map(Lmv2Challenge::deserialize, |c| Self::V2(c)),
             map(Lmv1Challenge::deserialize, |c| Self::V1(c)),
+            map(Lmv2Challenge::deserialize, |c| Self::V2(c)),
         ))(input)
     }
 }

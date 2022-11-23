@@ -9,10 +9,7 @@ use nom::sequence::{preceded, tuple};
 
 use crate::messages::{
     flags::{self, Flags},
-    structures::{
-        EncryptedRandomSessionKey, LmChallenge, Lmv1Challenge, Lmv2Challenge, NtChallenge,
-        Ntv1Challenge, Ntv2Challenge,
-    },
+    structures::{EncryptedRandomSessionKey, LmChallenge, NtChallenge},
     utils::write_u32,
     Field, NomError, Version, Wire, SIGNATURE,
 };
@@ -176,15 +173,16 @@ impl<'a> Wire<'a> for Authenticate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::messages::structures::{Lmv1Challenge, Ntv1Challenge};
 
     #[test]
     fn decode() {
         let authenticate_message = Authenticate {
-            lm_challenge_response: Some(LmChallenge::V2(Lmv2Challenge {
+            lm_challenge_response: Some(LmChallenge::V1(Lmv1Challenge {
                 response: [
-                    101, 170, 123, 110, 103, 248, 74, 163, 0, 0, 0, 0, 0, 0, 0, 0,
+                    101, 170, 123, 110, 103, 248, 74, 163, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0,
                 ],
-                challenge_from_client: [0, 0, 0, 0, 0, 0, 0, 0],
             })),
             nt_challenge_response: Some(NtChallenge::V1(Ntv1Challenge {
                 response: [
@@ -216,11 +214,11 @@ mod tests {
     #[test]
     fn encode() {
         let authenticate_message = Authenticate {
-            lm_challenge_response: Some(LmChallenge::V2(Lmv2Challenge {
+            lm_challenge_response: Some(LmChallenge::V1(Lmv1Challenge {
                 response: [
-                    101, 170, 123, 110, 103, 248, 74, 163, 0, 0, 0, 0, 0, 0, 0, 0,
+                    101, 170, 123, 110, 103, 248, 74, 163, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0,
                 ],
-                challenge_from_client: [0, 0, 0, 0, 0, 0, 0, 0],
             })),
             nt_challenge_response: Some(NtChallenge::V1(Ntv1Challenge {
                 response: [

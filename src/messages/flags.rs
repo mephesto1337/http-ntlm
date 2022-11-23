@@ -162,9 +162,22 @@ pub const NTLM_NEGOTIATE_OEM: u32 = 30;
 /// * A==0 and B==0: The protocol MUST return SEC_E_INVALID_TOKEN.
 pub const NTLMSSP_NEGOTIATE_UNICODE: u32 = 31;
 
-#[derive(Default, PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 #[repr(transparent)]
 pub struct Flags(pub u32);
+
+impl Default for Flags {
+    fn default() -> Self {
+        let mut flags = Self(0);
+        flags.set_flag(NTLMSSP_NEGOTIATE_56);
+        flags.set_flag(NTLMSSP_NEGOTIATE_KEY_EXCH);
+        flags.set_flag(NTLMSSP_NEGOTIATE_128);
+        flags.set_flag(NTLMSSP_NEGOTIATE_DATAGRAM);
+        flags.set_flag(NTLMSSP_NEGOTIATE_UNICODE);
+
+        flags
+    }
+}
 
 impl<'a> Wire<'a> for Flags {
     fn serialize_into<W>(&self, writer: &mut W) -> std::io::Result<usize>
@@ -239,6 +252,14 @@ impl Flags {
         }
         if flags.has_flag(R10) {
             log::warn!("flags.has_flag(R10)");
+            return false;
+        }
+
+        if flags.has_flag(NTLMSSP_TARGET_TYPE_DOMAIN) && flags.has_flag(NTLMSSP_TARGET_TYPE_SERVER)
+        {
+            log::warn!(
+                "flags cannot have NTLMSSP_TARGET_TYPE_DOMAIN and NTLMSSP_TARGET_TYPE_SERVER"
+            );
             return false;
         }
 

@@ -1,3 +1,4 @@
+use std::env;
 use std::fmt;
 
 use nom::bytes::complete::tag;
@@ -6,22 +7,130 @@ use nom::error::context;
 use nom::number::complete::{le_u32, le_u64};
 use nom::sequence::{preceded, tuple};
 
-use super::{
+use crate::messages::{
     flags::{self, Flags},
-    structures::AvPair,
+    structures::{AvPair, FileTime, MsvAvFlags, SingleHostData},
     utils::{write_u32, write_u64},
     Field, Version, Wire, SIGNATURE,
 };
 
 const MESSAGE_TYPE: u32 = 0x00000002;
 
-#[derive(Default, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct Challenge {
-    pub target_name: Option<String>,
+    target_name: Option<String>,
     pub negociate_flags: Flags,
     pub server_challenge: u64,
-    pub target_infos: Vec<AvPair>,
+    target_infos: Vec<AvPair>,
     pub version: Version,
+}
+
+impl Challenge {
+    generate_setter_getter!(
+        target_name,
+        flags::NTLMSSP_REQUEST_TARGET,
+        String,
+        set_target_name,
+        get_target_name
+    );
+
+    fn add_target_info(&mut self, info: AvPair) {
+        if self.target_infos.is_empty() {
+            self.target_infos.push(info);
+            self.target_infos.push(AvPair::MsvAvEOL);
+            self.negociate_flags
+                .set_flag(flags::NTLMSSP_NEGOTIATE_TARGET_INFO);
+        } else {
+            let index = self.target_infos.len() - 1;
+            self.target_infos.insert(index, info);
+        }
+    }
+
+    pub fn target_infos_add_computername(&mut self, computername: impl Into<String>) -> &mut Self {
+        self.add_target_info(AvPair::MsvAvNbComputerName(computername.into()));
+        self
+    }
+
+    pub fn target_infos_add_domainname(&mut self, domainname: impl Into<String>) -> &mut Self {
+        self.add_target_info(AvPair::MsvAvNbDomainName(domainname.into()));
+        self
+    }
+
+    pub fn target_infos_add_dnscomputername(
+        &mut self,
+        dnscomputername: impl Into<String>,
+    ) -> &mut Self {
+        self.add_target_info(AvPair::MsvAvDnsComputerName(dnscomputername.into()));
+        self
+    }
+
+    pub fn target_infos_add_dnsdomainname(
+        &mut self,
+        dnsdomainname: impl Into<String>,
+    ) -> &mut Self {
+        self.add_target_info(AvPair::MsvAvDnsDomainName(dnsdomainname.into()));
+        self
+    }
+
+    pub fn target_infos_add_dnstreename(&mut self, dnstreename: impl Into<String>) -> &mut Self {
+        self.add_target_info(AvPair::MsvAvDnsTreeName(dnstreename.into()));
+        self
+    }
+
+    pub fn target_infos_add_flags(&mut self, flags: MsvAvFlags) -> &mut Self {
+        self.add_target_info(AvPair::MsvAvFlags(flags));
+        self
+    }
+
+    pub fn target_infos_add_timestamp(&mut self, timestamp: FileTime) -> &mut Self {
+        self.add_target_info(AvPair::MsvAvTimestamp(timestamp));
+        self
+    }
+
+    pub fn target_infos_add_singlehost(&mut self, singlehost: SingleHostData) -> &mut Self {
+        self.add_target_info(AvPair::MsvAvSingleHost(singlehost));
+        self
+    }
+
+    pub fn target_infos_add_targetname(&mut self, targetname: impl Into<String>) -> &mut Self {
+        self.add_target_info(AvPair::MsvAvTargetName(targetname.into()));
+        self
+    }
+
+    pub fn target_infos_add_channelbindings(&mut self, channelbindings: [u8; 16]) -> &mut Self {
+        self.add_target_info(AvPair::MsvAvChannelBindings(channelbindings));
+        self
+    }
+
+    pub fn fill_from_env(&mut self) {
+        if let Ok(computer_name) = env::var("COMPUTERNAME") {
+            self.target_infos_add_computername(computer_name.to_uppercase());
+        }
+        if let Ok(dns_computer_name) = env::var("COMPUTERDNSNAME") {
+            self.target_infos_add_dnscomputername(dns_computer_name);
+        }
+        if let Ok(domain_name) = env::var("USERDOMAIN") {
+            self.target_infos_add_domainname(domain_name.to_uppercase());
+        }
+        if let Ok(dns_domain_name) = env::var("USERDNSDOMAIN") {
+            self.target_infos_add_dnsdomainname(dns_domain_name);
+        }
+    }
+}
+
+impl Default for Challenge {
+    fn default() -> Self {
+        let mut me = Self {
+            target_name: None,
+            negociate_flags: Flags::default(),
+            server_challenge: Default::default(),
+            target_infos: Vec::new(),
+            version: Default::default(),
+        };
+
+        me.fill_from_env();
+        me
+    }
 }
 
 impl fmt::Debug for Challenge {
@@ -146,6 +255,7 @@ mod tests {
             ],
             version: Version::from([67, 0, 73, 0, 83, 0, 67, 0]),
         };
+
         let message = base64::decode(m).unwrap();
         let maybe_decoded_message =
             Challenge::deserialize::<nom::error::VerboseError<&[u8]>>(&message[..]);
@@ -156,19 +266,15 @@ mod tests {
 
     #[test]
     fn encode() {
-        let challenge_message = Challenge {
-            target_name: Some("CISCOLAB".into()),
-            negociate_flags: Flags(2726920709),
-            server_challenge: 3376081536230188445,
-            target_infos: vec![
-                AvPair::MsvAvNbDomainName("CISCOLAB".into()),
-                AvPair::MsvAvNbComputerName("POSEIDON".into()),
-                AvPair::MsvAvDnsDomainName("ciscolab.com".into()),
-                AvPair::MsvAvDnsComputerName("poseidon.ciscolab.com".into()),
-                AvPair::MsvAvEOL,
-            ],
-            version: Version::from([67, 0, 73, 0, 83, 0, 67, 0]),
-        };
+        let mut challenge_message = Challenge::default();
+        challenge_message
+            .set_target_name(Some("CISCOLAB"))
+            .target_infos_add_domainname("CISCOLAB")
+            .target_infos_add_computername("POSEIDON")
+            .target_infos_add_dnsdomainname("ciscolab.com")
+            .target_infos_add_dnscomputername("poseidon.ciscolab.com");
+        challenge_message.server_challenge = 3376081536230188445;
+
         let ser = challenge_message.serialize();
         pretty_assertions::assert_eq!(
             challenge_message,

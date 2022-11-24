@@ -168,14 +168,7 @@ pub struct Flags(pub u32);
 
 impl Default for Flags {
     fn default() -> Self {
-        let mut flags = Self(0);
-        flags.set_flag(NTLMSSP_NEGOTIATE_56);
-        flags.set_flag(NTLMSSP_NEGOTIATE_KEY_EXCH);
-        flags.set_flag(NTLMSSP_NEGOTIATE_128);
-        flags.set_flag(NTLMSSP_NEGOTIATE_DATAGRAM);
-        flags.set_flag(NTLMSSP_NEGOTIATE_UNICODE);
-
-        flags
+        Self(1 << NTLMSSP_NEGOTIATE_UNICODE)
     }
 }
 
@@ -264,10 +257,18 @@ impl Flags {
         }
 
         if !flags.has_flag(NTLMSSP_NEGOTIATE_UNICODE) && !flags.has_flag(NTLM_NEGOTIATE_OEM) {
-            log::warn!("!flags.has_flag(NTLMSSP_NEGOTIATE_UNICODE) && !flags.has_flag(NTLM_NEGOTIATE_OEM) ");
+            log::warn!(
+                "!flags.has_flag(NTLMSSP_NEGOTIATE_UNICODE) && !flags.has_flag(NTLM_NEGOTIATE_OEM)"
+            );
             return false;
         }
 
+        if flags.has_flag(NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY)
+            && flags.has_flag(NTLMSSP_NEGOTIATE_LM_KEY)
+        {
+            log::warn!("flags.has_flag(NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY) && flags.has_flag(NTLMSSP_NEGOTIATE_LM_KEY)");
+            return false;
+        }
         true
     }
 }

@@ -64,14 +64,14 @@ impl<'a> Wire<'a> for AvId {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct MsvAvFlags {
     /// Indicates to the client that the account authentication is constrained.
-    account_authentication_constrained: bool,
+    pub account_authentication_constrained: bool,
     /// Indicates that the client is providing message integrity in the MIC field (section 2.2.1.3) in the AUTHENTICATE_MESSAGE.
-    mic_present: bool,
+    pub mic_present: bool,
     /// Indicates that the client is providing a target SPN generated from an untrusted source.
-    generated_spn_from_untrusted_source: bool,
+    pub generated_spn_from_untrusted_source: bool,
 }
 
 impl<'a> Wire<'a> for MsvAvFlags {
@@ -114,7 +114,7 @@ impl<'a> Wire<'a> for MsvAvFlags {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub enum AvPair {
     /// Indicates that this is the last AV_PAIR in the list. AvLen MUST be 0. This type of information MUST be present in the AV pair list.
     #[default]

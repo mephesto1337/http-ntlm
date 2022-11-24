@@ -7,6 +7,7 @@ use nom::combinator::map;
 use nom::error::context;
 use nom::sequence::tuple;
 
+use crate::crypto::{compute_response, hmac_md5};
 use crate::messages::{NomError, Wire};
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -34,10 +35,38 @@ impl<'a> Wire<'a> for Lmv1Challenge {
     }
 }
 
+impl Lmv1Challenge {
+    pub fn from_server_challenge(server_challenge: u64, hash: &[u8]) -> Self {
+        let response = compute_response(server_challenge, hash);
+        Self { response }
+    }
+}
+
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Lmv2Challenge {
     pub response: [u8; 16],
     pub challenge_from_client: [u8; 8],
+}
+
+impl Lmv2Challenge {
+    pub fn from_server_challenge(
+        server_challenge: u64,
+        nt_hash: &[u8],
+        client_challenge: [u8; 8],
+    ) -> Self {
+        let server_challenge = &server_challenge.to_le_bytes()[..];
+        let mut challenge = [0u8; 16];
+        let mut response = [0u8; 16];
+
+        (&mut challenge[..8]).copy_from_slice(server_challenge);
+        (&mut challenge[8..]).copy_from_slice(&client_challenge[..]);
+        hmac_md5(nt_hash, &challenge[..], &mut response[..]);
+
+        Self {
+            response,
+            challenge_from_client: client_challenge,
+        }
+    }
 }
 
 impl<'a> Wire<'a> for Lmv2Challenge {
@@ -118,8 +147,8 @@ impl<'a> Wire<'a> for LmChallenge {
         E: NomError<'a>,
     {
         alt((
-            map(Lmv1Challenge::deserialize, |c| Self::V1(c)),
             map(Lmv2Challenge::deserialize, |c| Self::V2(c)),
+            map(Lmv1Challenge::deserialize, |c| Self::V1(c)),
         ))(input)
     }
 }

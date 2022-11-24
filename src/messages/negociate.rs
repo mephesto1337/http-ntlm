@@ -58,13 +58,8 @@ impl Negociate {
 
 impl Default for Negociate {
     fn default() -> Self {
-        let mut negociate_flags = Flags::default();
-        negociate_flags.set_flag(flags::NTLMSSP_REQUEST_NON_NT_SESSION_KEY);
-        negociate_flags.set_flag(flags::NTLMSSP_TARGET_TYPE_DOMAIN);
-        negociate_flags.set_flag(flags::NTLMSSP_REQUEST_TARGET);
-
         Self {
-            negociate_flags,
+            negociate_flags: Flags::default(),
             domain_name: None,
             workstation: None,
             version: Default::default(),

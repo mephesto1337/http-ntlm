@@ -7,6 +7,7 @@ macro_rules! write_integer {
         }
     };
 }
+write_integer!(write_u8, u8);
 write_integer!(write_u16, u16);
 write_integer!(write_u32, u32);
 write_integer!(write_u64, u64);

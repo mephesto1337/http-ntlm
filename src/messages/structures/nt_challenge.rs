@@ -10,7 +10,7 @@ use nom::sequence::{preceded, tuple};
 
 use crate::messages::{
     structures::{AvPair, FileTime},
-    utils::write_u32,
+    utils::{write_u16, write_u32, write_u8},
     NomError, Wire,
 };
 
@@ -43,7 +43,7 @@ impl<'a> Wire<'a> for Ntv1Challenge {
 pub struct Ntv2Challenge {
     pub timestamp: FileTime,
     pub challenge_from_client: [u8; 8],
-    pub av_pairs: Vec<AvPair>,
+    pub target_infos: Vec<AvPair>,
 }
 
 impl<'a> Wire<'a> for Ntv2Challenge {
@@ -51,14 +51,22 @@ impl<'a> Wire<'a> for Ntv2Challenge {
     where
         W: io::Write,
     {
-        // [RespType, HiRespType, Reserved1]
-        writer.write_all(&[1, 1, 0, 0][..])?;
+        let mut size = 0;
+        // RespType
+        size += write_u8(writer, 1)?;
+        // HiRespType
+        size += write_u8(writer, 1)?;
+        // Reserved1
+        size += write_u16(writer, 0)?;
         // Reserved2
-        write_u32(writer, 0)?;
-        self.timestamp.serialize_into(writer)?;
+        size += write_u32(writer, 0)?;
+        size += self.timestamp.serialize_into(writer)?;
         writer.write_all(&self.challenge_from_client[..])?;
-        let mut size = 28;
-        size += self.av_pairs.serialize_into(writer)?;
+        // Reserved3
+        size += write_u32(writer, 0)?;
+        size += self.challenge_from_client.len();
+        debug_assert_eq!(size, 28);
+        size += self.target_infos.serialize_into(writer)?;
 
         Ok(size)
     }
@@ -69,7 +77,7 @@ impl<'a> Wire<'a> for Ntv2Challenge {
     {
         let mut challenge_from_client = [0u8; 8];
 
-        let (rest, (timestamp, challenge_from_client_data, _reserved3, av_pairs)) =
+        let (rest, (timestamp, challenge_from_client_data, _reserved3, target_infos)) =
             context(
                 "Ntv2Challenge",
                 preceded(
@@ -95,7 +103,7 @@ impl<'a> Wire<'a> for Ntv2Challenge {
             Self {
                 timestamp,
                 challenge_from_client,
-                av_pairs,
+                target_infos,
             },
         ))
     }

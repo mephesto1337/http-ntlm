@@ -5,11 +5,21 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["ntlmv1"]
+ntlmv1 = ["des"]
+
 [dependencies]
-base64 = "0.13"
 nom = "7"
 log = "0.4"
 env_logger = "0.9"
+rand = { version = "0.8", features = ["getrandom"] }
+des = { version = "0.8", optional = true }
+md4 = "0.10"
+md-5 = "0.10"
+hmac = "0.12"
+rc4 = "0.1"
 
 [dev-dependencies]
 pretty_assertions = "1"
+base64 = "0.13"

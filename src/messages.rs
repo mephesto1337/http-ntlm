@@ -52,7 +52,7 @@ macro_rules! generate_setter_getter {
     };
 }
 
-trait NomError<'a>:
+pub trait NomError<'a>:
     nom::error::ContextError<&'a [u8]> + nom::error::ParseError<&'a [u8]> + std::fmt::Debug
 {
 }
@@ -62,7 +62,7 @@ impl<'a, E> NomError<'a> for E where
 {
 }
 
-trait Wire<'a>: Sized {
+pub(super) trait Wire<'a>: Sized {
     fn serialize_into<W>(&self, writer: &mut W) -> io::Result<usize>
     where
         W: Write;
@@ -108,10 +108,15 @@ pub mod challenge;
 mod field;
 pub mod flags;
 pub mod negociate;
-mod structures;
+pub mod structures;
 mod unicode_string;
 mod utils;
 mod version;
 
-pub use field::Field;
-pub use version::Version;
+pub use authenticate::Authenticate;
+pub use challenge::Challenge;
+pub use flags::Flags;
+pub use negociate::Negociate;
+
+use field::Field;
+use version::Version;

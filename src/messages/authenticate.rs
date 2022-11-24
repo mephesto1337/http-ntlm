@@ -7,11 +7,14 @@ use nom::error::context;
 use nom::number::complete::le_u32;
 use nom::sequence::{preceded, tuple};
 
-use crate::messages::{
-    flags::{self, Flags},
-    structures::{EncryptedRandomSessionKey, LmChallenge, NtChallenge},
-    utils::write_u32,
-    Field, NomError, Version, Wire, SIGNATURE,
+use crate::{
+    crypto::hmac_md5,
+    messages::{
+        flags::{self, Flags},
+        structures::{EncryptedRandomSessionKey, LmChallenge, NtChallenge},
+        utils::write_u32,
+        Challenge, Field, Negociate, NomError, Version, Wire, SIGNATURE,
+    },
 };
 
 const MESSAGE_TYPE: u32 = 0x00000003;
@@ -27,6 +30,7 @@ pub struct Authenticate {
     pub negociate_flags: Flags,
     pub version: Version,
     pub mic: [u8; 16],
+    pub exported_session_key: Option<[u8; 16]>,
 }
 
 impl Authenticate {
@@ -47,6 +51,19 @@ impl Authenticate {
 
     pub fn get_encrypted_random_session_key(&self) -> Option<&EncryptedRandomSessionKey> {
         self.encrypted_random_session_key.as_ref()
+    }
+
+    pub fn compute_mic(&mut self, negociate: &Negociate, challenge: &Challenge) {
+        if let Some(exported_session_key) = self.exported_session_key.as_ref() {
+            let mut buffer = Vec::with_capacity(256);
+            self.mic = [0u8; 16];
+            negociate.serialize_into(&mut buffer).unwrap();
+            challenge.serialize_into(&mut buffer).unwrap();
+            self.serialize_into(&mut buffer).unwrap();
+            hmac_md5(&exported_session_key[..], &buffer[..], &mut self.mic[..]);
+        } else {
+            log::warn!("Cannot compute MIC as there is no `exported_session_key`.");
+        }
     }
 }
 
@@ -141,9 +158,9 @@ impl<'a> Wire<'a> for Authenticate {
 
         mic.copy_from_slice(mic_data);
         let lm_challenge_response =
-            dbg!(lm_challenge_response_field).get_data_if("lm_challenge_response", input, true)?;
+            lm_challenge_response_field.get_data_if("lm_challenge_response", input, true)?;
         let nt_challenge_response =
-            dbg!(nt_challenge_response_field).get_data_if("nt_challenge_response", input, true)?;
+            nt_challenge_response_field.get_data_if("nt_challenge_response", input, true)?;
         let domain = domain_field.get_data_if("domain", input, true)?;
         let user = user_field.get_data_if("user", input, true)?;
         let workstation = workstation_field.get_data_if("workstation", input, true)?;
@@ -165,6 +182,7 @@ impl<'a> Wire<'a> for Authenticate {
                 negociate_flags,
                 version,
                 mic,
+                exported_session_key: None,
             },
         ))
     }
@@ -173,22 +191,24 @@ impl<'a> Wire<'a> for Authenticate {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::messages::structures::{Lmv1Challenge, Ntv1Challenge};
+    use crate::messages::structures::{FileTime, Lmv2Challenge, Ntv2Challenge};
 
     #[test]
     fn decode() {
         let authenticate_message = Authenticate {
-            lm_challenge_response: Some(LmChallenge::V1(Lmv1Challenge {
+            lm_challenge_response: Some(LmChallenge::V2(Lmv2Challenge {
                 response: [
-                    101, 170, 123, 110, 103, 248, 74, 163, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0,
+                    101, 170, 123, 110, 103, 248, 74, 163, 0, 0, 0, 0, 0, 0, 0, 0,
                 ],
+                challenge_from_client: [0, 0, 0, 0, 0, 0, 0, 0],
             })),
-            nt_challenge_response: Some(NtChallenge::V1(Ntv1Challenge {
-                response: [
-                    170, 88, 221, 91, 155, 101, 92, 32, 127, 172, 61, 39, 230, 133, 201, 157, 122,
-                    22, 58, 84, 180, 182, 248, 204,
-                ],
+            nt_challenge_response: Some(NtChallenge::V2(Ntv2Challenge {
+                timestamp: FileTime {
+                    low: 1299703936,
+                    high: 388659,
+                },
+                challenge_from_client: [0, 1, 2, 3, 4, 5, 6, 7],
+                target_infos: Vec::new(),
             })),
             domain: Some("example".into()),
             user: Some("administrator".into()),
@@ -200,9 +220,10 @@ mod tests {
                 0x65, 0x0, 0x78, 0x0, 0x61, 0x0, 0x6d, 0x0, 0x70, 0x0, 0x6c, 0x0, 0x65, 0x0, 0x61,
                 0x0,
             ],
+            exported_session_key: None,
         };
 
-        let m = "TlRMTVNTUAADAAAAGAAYAIgAAAAYABgAoAAAAA4ADgBIAAAAGgAaAFYAAAAYABgAcAAAAAAAAAC4AAAABYKIogUBKAoAAAAPZQB4AGEAbQBwAGwAZQBhAGQAbQBpAG4AaQBzAHQAcgBhAHQAbwByAFcAQQBOAEcAXwBXAEUATgBDAEgAQQBPAGWqe25n+EqjAAAAAAAAAAAAAAAAAAAAAKpY3VubZVwgf6w9J+aFyZ16FjpUtLb4zA==";
+        let m = "TlRMTVNTUAADAAAAGAAYAFgAAAAcABwAcAAAAA4ADgCMAAAAGgAaAJoAAAAYABgAtAAAAAAAAAAAAAAABYKIogUBKAoAAAAPZQB4AGEAbQBwAGwAZQBhAGWqe25n+EqjAAAAAAAAAAAAAAAAAAAAAAEBAAAAAAAAgOh3TTPuBQAAAQIDBAUGBwAAAABlAHgAYQBtAHAAbABlAGEAZABtAGkAbgBpAHMAdAByAGEAdABvAHIAVwBBAE4ARwBfAFcARQBOAEMASABBAE8A";
         let message = base64::decode_config(m, base64::STANDARD).unwrap();
         let maybe_decoded_message =
             Authenticate::deserialize::<nom::error::VerboseError<&[u8]>>(&message[..]);
@@ -214,17 +235,19 @@ mod tests {
     #[test]
     fn encode() {
         let authenticate_message = Authenticate {
-            lm_challenge_response: Some(LmChallenge::V1(Lmv1Challenge {
+            lm_challenge_response: Some(LmChallenge::V2(Lmv2Challenge {
                 response: [
-                    101, 170, 123, 110, 103, 248, 74, 163, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0,
+                    101, 170, 123, 110, 103, 248, 74, 163, 0, 0, 0, 0, 0, 0, 0, 0,
                 ],
+                challenge_from_client: [0, 0, 0, 0, 0, 0, 0, 0],
             })),
-            nt_challenge_response: Some(NtChallenge::V1(Ntv1Challenge {
-                response: [
-                    170, 88, 221, 91, 155, 101, 92, 32, 127, 172, 61, 39, 230, 133, 201, 157, 122,
-                    22, 58, 84, 180, 182, 248, 204,
-                ],
+            nt_challenge_response: Some(NtChallenge::V2(Ntv2Challenge {
+                timestamp: FileTime {
+                    low: 1299703936,
+                    high: 388659,
+                },
+                challenge_from_client: [0, 1, 2, 3, 4, 5, 6, 7],
+                target_infos: Vec::new(),
             })),
             domain: Some("example".into()),
             user: Some("administrator".into()),
@@ -236,9 +259,11 @@ mod tests {
                 0x65, 0x0, 0x78, 0x0, 0x61, 0x0, 0x6d, 0x0, 0x70, 0x0, 0x6c, 0x0, 0x65, 0x0, 0x61,
                 0x0,
             ],
+            exported_session_key: None,
         };
 
         let ser = authenticate_message.serialize();
+        eprintln!("b64 = {}", base64::encode(&ser[..]));
         pretty_assertions::assert_eq!(
             authenticate_message,
             Authenticate::deserialize::<nom::error::VerboseError<&[u8]>>(&ser[..])

@@ -30,6 +30,12 @@ impl From<&[u8]> for EncryptedRandomSessionKey {
     }
 }
 
+impl From<Vec<u8>> for EncryptedRandomSessionKey {
+    fn from(d: Vec<u8>) -> Self {
+        Self(d)
+    }
+}
+
 impl Deref for EncryptedRandomSessionKey {
     type Target = [u8];
 

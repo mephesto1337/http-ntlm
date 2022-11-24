@@ -21,7 +21,7 @@ pub struct Challenge {
     target_name: Option<String>,
     pub negociate_flags: Flags,
     pub server_challenge: u64,
-    target_infos: Vec<AvPair>,
+    pub(crate) target_infos: Vec<AvPair>,
     pub version: Version,
 }
 
@@ -115,6 +115,10 @@ impl Challenge {
         if let Ok(dns_domain_name) = env::var("USERDNSDOMAIN") {
             self.target_infos_add_dnsdomainname(dns_domain_name);
         }
+    }
+
+    pub fn get_target_infos(&self) -> &[AvPair] {
+        &self.target_infos[..]
     }
 }
 

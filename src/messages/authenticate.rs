@@ -11,7 +11,7 @@ use crate::{
     crypto::hmac_md5,
     messages::{
         flags::{self, Flags},
-        structures::{EncryptedRandomSessionKey, LmChallenge, NtChallenge},
+        structures::{EncryptedRandomSessionKey, ExportedSessionKey, LmChallenge, NtChallenge},
         utils::write_u32,
         Challenge, Field, Negociate, NomError, Version, Wire, SIGNATURE,
     },
@@ -30,7 +30,7 @@ pub struct Authenticate {
     pub negociate_flags: Flags,
     pub version: Version,
     pub mic: [u8; 16],
-    pub exported_session_key: Option<[u8; 16]>,
+    pub exported_session_key: Option<ExportedSessionKey>,
 }
 
 impl Authenticate {

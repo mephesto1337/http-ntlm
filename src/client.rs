@@ -1,13 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    crypto::{
-        hmac_md5,
-        lm::LmHash,
-        md4, md5,
-        nt::{self, NtHash},
-        ntlmv1,
-    },
+    crypto::{lm::LmHash, nt::NtHash, ntlmv1},
     messages::{
         flags,
         structures::{
@@ -292,7 +286,7 @@ where
             ClientState::ChallengeReceived(ref c) => c,
             _ => unreachable!("Invalid client state"),
         };
-        let mut client_challenge = ClientChallenge::random();
+        let client_challenge = ClientChallenge::random();
         let (lm_challenge, nt_challenge, session_base_key) = ntlmv1::compute_response(
             &challenge.negociate_flags,
             &self.nt_hash,
@@ -302,30 +296,25 @@ where
             true,
         );
 
-        let (exported_session_key, encrypted_random_session_key) = if challenge
-            .negociate_flags
-            .has_flag(flags::NTLMSSP_NEGOTIATE_KEY_EXCH)
-        {
-            let mut exported_session_key = [0u8; 16];
-            OsRng.fill_bytes(&mut exported_session_key[..]);
-            let mut encrypted_random_session_key = Vec::from(session_base_key);
-            let mut rc4 = Rc4::new(&session_base_key.into());
-            rc4.apply_keystream(&mut encrypted_random_session_key);
-            (
-                exported_session_key,
-                Some(encrypted_random_session_key.into()),
-            )
-        } else {
-            (session_base_key, None)
-        };
+        let key_exchange_key = ntlmv1::kxkey(
+            &challenge.negociate_flags,
+            &session_base_key,
+            &lm_challenge,
+            &self.lm_hash,
+            Some(&challenge.server_challenge),
+        );
+
+        let (exported_session_key, encrypted_random_session_key) =
+            ntlmv1::encrypt_random_session_key(&challenge.negociate_flags, &key_exchange_key, None);
+
         let mut auth = Authenticate::default();
-        auth.lm_challenge_response = Some(lm_challenge);
-        auth.nt_challenge_response = Some(nt_challenge);
+        auth.lm_challenge_response = Some(lm_challenge.into());
+        auth.nt_challenge_response = Some(nt_challenge.into());
         auth.domain = Some(self.domain.to_owned());
         auth.user = Some(self.username.to_owned());
         auth.workstation = None;
-        auth.set_encrypted_random_session_key(encrypted_random_session_key);
-        auth.mic = mic;
+        auth.set_encrypted_random_session_key(Some(encrypted_random_session_key));
+        // auth.mic = mic;
         auth.exported_session_key = Some(exported_session_key);
 
         self.buffer.clear();

@@ -209,42 +209,52 @@ impl Flags {
 
         if flags.has_flag(R1) {
             log::warn!("flags.has_flag(R1)");
+            #[cfg(features = "strict")]
             return false;
         }
         if flags.has_flag(R2) {
             log::warn!("flags.has_flag(R2)");
+            #[cfg(features = "strict")]
             return false;
         }
         if flags.has_flag(R3) {
             log::warn!("flags.has_flag(R3)");
+            #[cfg(features = "strict")]
             return false;
         }
         if flags.has_flag(R4) {
             log::warn!("flags.has_flag(R4)");
+            #[cfg(features = "strict")]
             return false;
         }
         if flags.has_flag(R5) {
             log::warn!("flags.has_flag(R5)");
+            #[cfg(features = "strict")]
             return false;
         }
         if flags.has_flag(R6) {
             log::warn!("flags.has_flag(R6)");
+            #[cfg(features = "strict")]
             return false;
         }
         if flags.has_flag(R7) {
             log::warn!("flags.has_flag(R7)");
+            #[cfg(features = "strict")]
             return false;
         }
         if flags.has_flag(R8) {
             log::warn!("flags.has_flag(R8)");
+            #[cfg(features = "strict")]
             return false;
         }
         if flags.has_flag(R9) {
             log::warn!("flags.has_flag(R9)");
-            // return false;
+            #[cfg(features = "strict")]
+            return false;
         }
         if flags.has_flag(R10) {
             log::warn!("flags.has_flag(R10)");
+            #[cfg(features = "strict")]
             return false;
         }
 
@@ -253,6 +263,7 @@ impl Flags {
             log::warn!(
                 "flags cannot have NTLMSSP_TARGET_TYPE_DOMAIN and NTLMSSP_TARGET_TYPE_SERVER"
             );
+            #[cfg(features = "strict")]
             return false;
         }
 
@@ -260,6 +271,7 @@ impl Flags {
             log::warn!(
                 "!flags.has_flag(NTLMSSP_NEGOTIATE_UNICODE) && !flags.has_flag(NTLM_NEGOTIATE_OEM)"
             );
+            #[cfg(features = "strict")]
             return false;
         }
 
@@ -267,6 +279,7 @@ impl Flags {
             && flags.has_flag(NTLMSSP_NEGOTIATE_LM_KEY)
         {
             log::warn!("flags.has_flag(NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY) && flags.has_flag(NTLMSSP_NEGOTIATE_LM_KEY)");
+            #[cfg(features = "strict")]
             return false;
         }
         true

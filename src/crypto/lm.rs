@@ -25,3 +25,19 @@ pub fn lmowfv1(password: &str) -> LmHash {
 
     lm_hash
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hash_password() {
+        let password = "password";
+        let hash = [
+            0xe5, 0x2c, 0xac, 0x67, 0x41, 0x9a, 0x9a, 0x22, 0x4a, 0x3b, 0x10, 0x8f, 0x3f, 0xa6,
+            0xcb, 0x6d,
+        ];
+
+        pretty_assertions::assert_eq!(hash, lmowfv1(password));
+    }
+}

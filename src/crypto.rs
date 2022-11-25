@@ -1,3 +1,5 @@
+use crate::messages::structures::Response24;
+
 use hmac::{Hmac, Mac};
 use md4::Md4;
 use md5::{Digest, Md5};
@@ -5,6 +7,7 @@ use md5::{Digest, Md5};
 pub mod des;
 pub mod lm;
 pub mod nt;
+pub mod ntlmv1;
 
 pub fn md4(input: &[u8], out: &mut [u8]) {
     let mut hasher = Md4::new();
@@ -28,19 +31,16 @@ pub fn hmac_md5(key: &[u8], input: &[u8], out: &mut [u8]) {
     out.copy_from_slice(&result[..]);
 }
 
-pub fn compute_response(server_challenge: u64, hash: &[u8]) -> [u8; 24] {
+fn desl(key: &[u8], data: &[u8]) -> Response24 {
+    assert!(key.len() == 16 && data.len() == 8);
+
     let mut extended_hash = [0u8; 21];
-    (&mut extended_hash[..hash.len()]).copy_from_slice(hash);
-    let server_challenge = &server_challenge.to_le_bytes()[..];
+    (&mut extended_hash[..16]).copy_from_slice(&key[..]);
     let mut response = [0u8; 24];
 
-    des::des7_encrypt(&extended_hash[..7], server_challenge, &mut response[..8]);
-    des::des7_encrypt(
-        &extended_hash[7..14],
-        server_challenge,
-        &mut response[8..16],
-    );
-    des::des7_encrypt(&extended_hash[14..], server_challenge, &mut response[16..]);
+    des::des7_encrypt(&extended_hash[..7], data, &mut response[..8]);
+    des::des7_encrypt(&extended_hash[7..14], data, &mut response[8..16]);
+    des::des7_encrypt(&extended_hash[14..], data, &mut response[16..]);
 
-    response
+    response.into()
 }

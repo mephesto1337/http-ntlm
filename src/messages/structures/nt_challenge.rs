@@ -1,22 +1,20 @@
 use std::io;
-use std::mem::size_of_val;
 
 use nom::branch::alt;
-use nom::bytes::complete::take;
 use nom::combinator::{map, verify};
 use nom::error::context;
 use nom::number::complete::{le_u16, le_u32, le_u8};
 use nom::sequence::{preceded, tuple};
 
 use crate::messages::{
-    structures::{AvPair, FileTime},
+    structures::{AvPair, ClientChallenge, FileTime, Response24},
     utils::{write_u16, write_u32, write_u8},
     NomError, Wire,
 };
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Ntv1Challenge {
-    pub response: [u8; 24],
+    pub response: Response24,
 }
 
 impl<'a> Wire<'a> for Ntv1Challenge {
@@ -24,17 +22,14 @@ impl<'a> Wire<'a> for Ntv1Challenge {
     where
         W: io::Write,
     {
-        writer.write_all(&self.response[..])?;
-        Ok(self.response.len())
+        self.response.serialize_into(writer)
     }
 
     fn deserialize<E>(input: &'a [u8]) -> nom::IResult<&'a [u8], Self, E>
     where
         E: NomError<'a>,
     {
-        let mut response = [0u8; 24];
-        let (rest, data) = context("Ntv1Challenge", take(size_of_val(&response)))(input)?;
-        response.copy_from_slice(data);
+        let (rest, response) = context("Ntv1Challenge", Response24::deserialize)(input)?;
         Ok((rest, Self { response }))
     }
 }
@@ -42,7 +37,7 @@ impl<'a> Wire<'a> for Ntv1Challenge {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Ntv2Challenge {
     pub timestamp: FileTime,
-    pub challenge_from_client: [u8; 8],
+    pub challenge_from_client: ClientChallenge,
     pub target_infos: Vec<AvPair>,
 }
 
@@ -61,7 +56,7 @@ impl<'a> Wire<'a> for Ntv2Challenge {
         // Reserved2
         size += write_u32(writer, 0)?;
         size += self.timestamp.serialize_into(writer)?;
-        writer.write_all(&self.challenge_from_client[..])?;
+        size += self.challenge_from_client.serialize_into(writer)?;
         // Reserved3
         size += write_u32(writer, 0)?;
         size += self.challenge_from_client.len();
@@ -75,28 +70,23 @@ impl<'a> Wire<'a> for Ntv2Challenge {
     where
         E: NomError<'a>,
     {
-        let mut challenge_from_client = [0u8; 8];
-
-        let (rest, (timestamp, challenge_from_client_data, _reserved3, target_infos)) =
-            context(
-                "Ntv2Challenge",
-                preceded(
-                    tuple((
-                        context("RespType", verify(le_u8, |b| *b == 1)),
-                        context("HiRespType", verify(le_u8, |b| *b == 1)),
-                        context("Reserved1", verify(le_u16, |b| *b == 0)),
-                        context("Reserved2", verify(le_u32, |b| *b == 0)),
-                    )),
-                    tuple((
-                        FileTime::deserialize,
-                        take(size_of_val(&challenge_from_client)),
-                        verify(le_u32, |b| *b == 0),
-                        Vec::<AvPair>::deserialize,
-                    )),
-                ),
-            )(input)?;
-
-        challenge_from_client.copy_from_slice(challenge_from_client_data);
+        let (rest, (timestamp, challenge_from_client, _reserved3, target_infos)) = context(
+            "Ntv2Challenge",
+            preceded(
+                tuple((
+                    context("RespType", verify(le_u8, |b| *b == 1)),
+                    context("HiRespType", verify(le_u8, |b| *b == 1)),
+                    context("Reserved1", verify(le_u16, |b| *b == 0)),
+                    context("Reserved2", verify(le_u32, |b| *b == 0)),
+                )),
+                tuple((
+                    FileTime::deserialize,
+                    ClientChallenge::deserialize,
+                    verify(le_u32, |b| *b == 0),
+                    Vec::<AvPair>::deserialize,
+                )),
+            ),
+        )(input)?;
 
         Ok((
             rest,

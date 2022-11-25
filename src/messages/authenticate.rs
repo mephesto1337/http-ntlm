@@ -199,15 +199,16 @@ mod tests {
             lm_challenge_response: Some(LmChallenge::V2(Lmv2Challenge {
                 response: [
                     101, 170, 123, 110, 103, 248, 74, 163, 0, 0, 0, 0, 0, 0, 0, 0,
-                ],
-                challenge_from_client: [0, 0, 0, 0, 0, 0, 0, 0],
+                ]
+                .into(),
+                challenge_from_client: [0, 0, 0, 0, 0, 0, 0, 0].into(),
             })),
             nt_challenge_response: Some(NtChallenge::V2(Ntv2Challenge {
                 timestamp: FileTime {
                     low: 1299703936,
                     high: 388659,
                 },
-                challenge_from_client: [0, 1, 2, 3, 4, 5, 6, 7],
+                challenge_from_client: [0, 1, 2, 3, 4, 5, 6, 7].into(),
                 target_infos: Vec::new(),
             })),
             domain: Some("example".into()),
@@ -238,15 +239,16 @@ mod tests {
             lm_challenge_response: Some(LmChallenge::V2(Lmv2Challenge {
                 response: [
                     101, 170, 123, 110, 103, 248, 74, 163, 0, 0, 0, 0, 0, 0, 0, 0,
-                ],
-                challenge_from_client: [0, 0, 0, 0, 0, 0, 0, 0],
+                ]
+                .into(),
+                challenge_from_client: [0, 0, 0, 0, 0, 0, 0, 0].into(),
             })),
             nt_challenge_response: Some(NtChallenge::V2(Ntv2Challenge {
                 timestamp: FileTime {
                     low: 1299703936,
                     high: 388659,
                 },
-                challenge_from_client: [0, 1, 2, 3, 4, 5, 6, 7],
+                challenge_from_client: [0, 1, 2, 3, 4, 5, 6, 7].into(),
                 target_infos: Vec::new(),
             })),
             domain: Some("example".into()),

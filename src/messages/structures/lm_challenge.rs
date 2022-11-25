@@ -1,18 +1,21 @@
 use std::io;
-use std::mem::size_of_val;
 
 use nom::branch::alt;
-use nom::bytes::complete::take;
 use nom::combinator::map;
 use nom::error::context;
 use nom::sequence::tuple;
 
-use crate::crypto::{compute_response, hmac_md5};
-use crate::messages::{NomError, Wire};
+use crate::{
+    crypto::hmac_md5,
+    messages::{
+        structures::{ClientChallenge, Response16, Response24, ServerChallenge},
+        NomError, Wire,
+    },
+};
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Lmv1Challenge {
-    pub response: [u8; 24],
+    pub response: Response24,
 }
 
 impl<'a> Wire<'a> for Lmv1Challenge {
@@ -20,51 +23,48 @@ impl<'a> Wire<'a> for Lmv1Challenge {
     where
         W: io::Write,
     {
-        writer.write_all(&self.response[..])?;
-        Ok(self.response.len())
+        self.response.serialize_into(writer)
     }
 
     fn deserialize<E>(input: &'a [u8]) -> nom::IResult<&'a [u8], Self, E>
     where
         E: NomError<'a>,
     {
-        let mut response = [0u8; 24];
-        let (rest, data) = context("Lmv1Challenge", take(size_of_val(&response)))(input)?;
-        response.copy_from_slice(data);
+        let (rest, response) = context("Lmv1Challenge", Response24::deserialize)(input)?;
         Ok((rest, Self { response }))
     }
 }
 
 impl Lmv1Challenge {
-    pub fn from_server_challenge(server_challenge: u64, hash: &[u8]) -> Self {
-        let response = compute_response(server_challenge, hash);
-        Self { response }
+    pub fn from_client_challenge(client_challenge: &ClientChallenge) -> Self {
+        let mut me = Self::default();
+        (&mut me.response[..client_challenge.len()]).copy_from_slice(client_challenge);
+        me
     }
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Lmv2Challenge {
-    pub response: [u8; 16],
-    pub challenge_from_client: [u8; 8],
+    pub response: Response16,
+    pub challenge_from_client: ClientChallenge,
 }
 
 impl Lmv2Challenge {
     pub fn from_server_challenge(
-        server_challenge: u64,
+        server_challenge: &ServerChallenge,
         nt_hash: &[u8],
-        client_challenge: [u8; 8],
+        client_challenge: &ClientChallenge,
     ) -> Self {
-        let server_challenge = &server_challenge.to_le_bytes()[..];
         let mut challenge = [0u8; 16];
         let mut response = [0u8; 16];
 
         (&mut challenge[..8]).copy_from_slice(server_challenge);
-        (&mut challenge[8..]).copy_from_slice(&client_challenge[..]);
+        (&mut challenge[8..]).copy_from_slice(client_challenge);
         hmac_md5(nt_hash, &challenge[..], &mut response[..]);
 
         Self {
-            response,
-            challenge_from_client: client_challenge,
+            response: response.into(),
+            challenge_from_client: client_challenge.clone(),
         }
     }
 }
@@ -74,28 +74,19 @@ impl<'a> Wire<'a> for Lmv2Challenge {
     where
         W: io::Write,
     {
-        writer.write_all(&self.response[..])?;
-        writer.write_all(&self.challenge_from_client[..])?;
-        Ok(self.response.len() + self.challenge_from_client.len())
+        let mut size = self.response.serialize_into(writer)?;
+        size += self.challenge_from_client.serialize_into(writer)?;
+        Ok(size)
     }
 
     fn deserialize<E>(input: &'a [u8]) -> nom::IResult<&'a [u8], Self, E>
     where
         E: NomError<'a>,
     {
-        let mut response = [0u8; 16];
-        let mut challenge_from_client = [0u8; 8];
-
-        let (rest, (response_data, challenge_from_client_data)) = context(
+        let (rest, (response, challenge_from_client)) = context(
             "Lmv2Challenge",
-            tuple((
-                take(size_of_val(&response)),
-                take(size_of_val(&challenge_from_client)),
-            )),
+            tuple((Response16::deserialize, ClientChallenge::deserialize)),
         )(input)?;
-
-        response.copy_from_slice(response_data);
-        challenge_from_client.copy_from_slice(challenge_from_client_data);
 
         Ok((
             rest,

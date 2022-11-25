@@ -35,6 +35,12 @@ impl FileTime {
     pub fn as_u64(&self) -> u64 {
         ((self.high as u64) << 32) | (self.low as u64)
     }
+
+    pub fn now() -> Self {
+        SystemTime::now()
+            .try_into()
+            .expect("now should be after UNIX_EPOCH")
+    }
 }
 
 impl<'a> Wire<'a> for FileTime {

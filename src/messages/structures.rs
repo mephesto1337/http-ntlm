@@ -90,5 +90,6 @@ buffer_aliases!(ClientChallenge, "client_challenge", 8usize);
 buffer_aliases!(SessionBaseKey, "session_base_key", 16usize);
 buffer_aliases!(KeyExchangeKey, "key_exchange_key", 16usize);
 buffer_aliases!(ExportedSessionKey, "exported_session_key", 16usize);
+buffer_aliases!(NtProofStr, "nt_proof_str", 16usize);
 buffer_aliases!(Response16, "response", 16usize);
 buffer_aliases!(Response24, "response", 24usize);

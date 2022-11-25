@@ -8,6 +8,7 @@ pub mod des;
 pub mod lm;
 pub mod nt;
 pub mod ntlmv1;
+pub mod ntlmv2;
 
 pub fn md4(input: &[u8], out: &mut [u8]) {
     let mut hasher = Md4::new();

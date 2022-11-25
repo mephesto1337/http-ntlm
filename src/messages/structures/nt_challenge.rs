@@ -59,7 +59,6 @@ impl<'a> Wire<'a> for Ntv2Challenge {
         size += self.challenge_from_client.serialize_into(writer)?;
         // Reserved3
         size += write_u32(writer, 0)?;
-        size += self.challenge_from_client.len();
         debug_assert_eq!(size, 28);
         size += self.target_infos.serialize_into(writer)?;
 
@@ -154,5 +153,37 @@ mod tests {
     fn size() {
         assert_eq!(size_of::<Ntv1Challenge>(), 24);
         assert!(size_of::<Ntv2Challenge>() >= 28);
+    }
+
+    #[test]
+    fn decode_ntv2() {
+        let nt_challenge = Ntv2Challenge {
+            timestamp: FileTime { low: 0, high: 0 },
+            challenge_from_client: [0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa].into(),
+            target_infos: vec![
+                AvPair::MsvAvNbDomainName("Domain".into()),
+                AvPair::MsvAvNbComputerName("Server".into()),
+                AvPair::MsvAvEOL,
+                AvPair::MsvAvEOL,
+            ],
+        };
+        let raw_message = [
+            0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0x00, 0x00, 0x00, 0x00,
+            0x02, 0x00, 0x0c, 0x00, 0x44, 0x00, 0x6f, 0x00, 0x6d, 0x00, 0x61, 0x00, 0x69, 0x00,
+            0x6e, 0x00, 0x01, 0x00, 0x0c, 0x00, 0x53, 0x00, 0x65, 0x00, 0x72, 0x00, 0x76, 0x00,
+            0x65, 0x00, 0x72, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+
+        let (rest, result) =
+            Ntv2Challenge::deserialize::<nom::error::VerboseError<_>>(&raw_message[..]).unwrap();
+        pretty_assertions::assert_eq!(nt_challenge, result);
+        pretty_assertions::assert_eq!(rest.len(), 0);
+
+        eprintln!("rest   = {:x?}", rest);
+        eprintln!("result = {:?}", result);
+
+        let buf = result.serialize();
+        pretty_assertions::assert_eq!(&raw_message[..], &buf[..]);
     }
 }

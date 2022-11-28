@@ -1,22 +1,15 @@
 use crate::{
     crypto::{lm::LmHash, nt::NtHash},
     messages::{
-        flags::{
-            Flags, NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY, NTLMSSP_NEGOTIATE_KEY_EXCH,
-            NTLMSSP_NEGOTIATE_LM_KEY, NTLMSSP_NEGOTIATE_SEAL, NTLMSSP_NEGOTIATE_SIGN,
-            NTLMSSP_REQUEST_NON_NT_SESSION_KEY,
-        },
+        flags::{Flags, NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY},
         structures::{
-            ClientChallenge, EncryptedRandomSessionKey, ExportedSessionKey, KeyExchangeKey,
-            Lmv1Challenge, Ntv1Challenge, ServerChallenge, SessionBaseKey,
+            ClientChallenge, Lmv1Challenge, Ntv1Challenge, ServerChallenge, SessionBaseKey,
         },
     },
 };
 
-use rc4::{KeyInit, Rc4, StreamCipher};
-
 /// MS-NLMP 3.1.1.1 Variables Internal to the Protocol
-pub const NO_LM_RESPONSE_NTLM_V1: bool = true;
+// pub const NO_LM_RESPONSE_NTLM_V1: bool = true;
 
 pub fn compute_response(
     flags: &Flags,
@@ -59,106 +52,13 @@ pub fn compute_response(
     }
 }
 
-pub fn kxkey(
-    flags: &Flags,
-    session_base_key: &SessionBaseKey,
-    lm_response: &Lmv1Challenge,
-    lm_hash: &LmHash,
-    server_challenge: Option<&ServerChallenge>,
-) -> KeyExchangeKey {
-    let mut key_exchange_key = KeyExchangeKey::default();
-
-    if let Some(server_challenge) = server_challenge {
-        let mut input = [0u8; 16];
-        (&mut input[..8]).copy_from_slice(server_challenge);
-        (&mut input[8..]).copy_from_slice(&lm_response.response[..8]);
-        super::hmac_md5(session_base_key, &input[..], &mut key_exchange_key);
-    } else {
-        if flags.has_flag(NTLMSSP_NEGOTIATE_LM_KEY) {
-            crate::crypto::des::des7_encrypt(
-                &lm_hash[..7],
-                &lm_response.response[..8],
-                &mut key_exchange_key[..8],
-            );
-            let key = [lm_hash[7], 0xbd, 0xbd, 0xbd, 0xbd, 0xbd, 0xbd];
-            crate::crypto::des::des7_encrypt(
-                &key,
-                &lm_response.response[..8],
-                &mut key_exchange_key[8..],
-            );
-        } else {
-            if flags.has_flag(NTLMSSP_REQUEST_NON_NT_SESSION_KEY) {
-                (&mut key_exchange_key[..8]).copy_from_slice(&lm_hash[..8]);
-            } else {
-                (&mut key_exchange_key).copy_from_slice(session_base_key);
-            }
-        }
-    }
-    key_exchange_key
-}
-
-pub fn encrypt_random_session_key(
-    flags: &Flags,
-    key_exchange_key: &KeyExchangeKey,
-    exported_session_key: Option<ExportedSessionKey>,
-) -> (ExportedSessionKey, EncryptedRandomSessionKey) {
-    if flags.has_flag(NTLMSSP_NEGOTIATE_KEY_EXCH)
-        && (flags.has_flag(NTLMSSP_NEGOTIATE_SIGN) || flags.has_flag(NTLMSSP_NEGOTIATE_SEAL))
-    {
-        let exported_session_key = if let Some(e) = exported_session_key {
-            e
-        } else {
-            ExportedSessionKey::random()
-        };
-        let mut kek = [0u8; 16];
-        (&mut kek).copy_from_slice(key_exchange_key);
-
-        let mut encrypted_random_session_key =
-            EncryptedRandomSessionKey::from(&*exported_session_key);
-        let mut rc4 = Rc4::new(&kek.into());
-        rc4.apply_keystream(&mut encrypted_random_session_key);
-        (exported_session_key, encrypted_random_session_key)
-    } else {
-        let mut exported_session_key = ExportedSessionKey::default();
-        (&mut exported_session_key).copy_from_slice(key_exchange_key);
-        (exported_session_key, EncryptedRandomSessionKey::default())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::tests::*;
+    use crate::crypto::{encrypt_random_session_key, kxkey};
     use crate::messages::flags::*;
-
-    const LM_HASH: LmHash = [
-        0xe5, 0x2c, 0xac, 0x67, 0x41, 0x9a, 0x9a, 0x22, 0x4a, 0x3b, 0x10, 0x8f, 0x3f, 0xa6, 0xcb,
-        0x6d,
-    ];
-    const NT_HASH: NtHash = [
-        0xa4, 0xf4, 0x9c, 0x40, 0x65, 0x10, 0xbd, 0xca, 0xb6, 0x82, 0x4e, 0xe7, 0xc3, 0x0f, 0xd8,
-        0x52,
-    ];
-    const SERVER_CHALLENGE: [u8; 8] = [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef];
-    const CLIENT_CHALLENGE: [u8; 8] = [0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa];
-    const FLAGS: u32 = (1 << NTLMSSP_NEGOTIATE_KEY_EXCH)
-        | (1 << NTLMSSP_NEGOTIATE_56)
-        | (1 << NTLMSSP_NEGOTIATE_128)
-        | (1 << NTLMSSP_NEGOTIATE_VERSION)
-        | (1 << NTLMSSP_TARGET_TYPE_SERVER)
-        | (1 << NTLMSSP_NEGOTIATE_ALWAYS_SIGN)
-        | (1 << NTLMSSP_NEGOTIATE_NTLM)
-        | (1 << NTLMSSP_NEGOTIATE_SEAL)
-        | (1 << NTLMSSP_NEGOTIATE_SIGN)
-        | (1 << NTLM_NEGOTIATE_OEM)
-        | (1 << NTLMSSP_NEGOTIATE_UNICODE);
-    const SESSION_BASE_KEY: [u8; 16] = [
-        0xd8, 0x72, 0x62, 0xb0, 0xcd, 0xe4, 0xb1, 0xcb, 0x74, 0x99, 0xbe, 0xcc, 0xcd, 0xf1, 0x07,
-        0x84,
-    ];
-    pub(super) const RANDOM_SESSION_KEY: [u8; 16] = [
-        0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
-        0x55,
-    ];
+    use crate::messages::structures::*;
 
     #[test]
     fn without_extented_session_security() {
@@ -244,7 +144,13 @@ mod tests {
 
         let mut flags = Flags(FLAGS);
         flags.set_flag(NTLMSSP_NEGOTIATE_LM_KEY);
-        let kek = kxkey(&flags, &session_base_key, &lm_response, &LM_HASH, None);
+        let kek = kxkey(
+            &flags,
+            &session_base_key,
+            &lm_response.response[..8],
+            &LM_HASH,
+            None,
+        );
         pretty_assertions::assert_eq!(key_exchange_key, kek);
     }
 
@@ -257,10 +163,11 @@ mod tests {
         .into();
         let mut flags = Flags(FLAGS);
 
-        let encrypted_random_session_key = EncryptedRandomSessionKey::from(vec![
+        let encrypted_random_session_key: EncryptedRandomSessionKey = [
             0x51, 0x88, 0x22, 0xb1, 0xb3, 0xf3, 0x50, 0xc8, 0x95, 0x86, 0x82, 0xec, 0xbb, 0x3e,
             0x3c, 0xb7,
-        ]);
+        ]
+        .into();
         pretty_assertions::assert_eq!(
             encrypted_random_session_key,
             encrypt_random_session_key(&flags, &key_exchange_key, Some(RANDOM_SESSION_KEY.into()))
@@ -273,10 +180,11 @@ mod tests {
             0x00, 0x00,
         ]
         .into();
-        let encrypted_random_session_key = EncryptedRandomSessionKey::from(vec![
+        let encrypted_random_session_key: EncryptedRandomSessionKey = [
             0x74, 0x52, 0xca, 0x55, 0xc2, 0x25, 0xa1, 0xca, 0x04, 0xb4, 0x8f, 0xae, 0x32, 0xcf,
             0x56, 0xfc,
-        ]);
+        ]
+        .into();
         pretty_assertions::assert_eq!(
             encrypted_random_session_key,
             encrypt_random_session_key(&flags, &key_exchange_key, Some(RANDOM_SESSION_KEY.into()))
@@ -290,10 +198,11 @@ mod tests {
             0xc8, 0xa0,
         ]
         .into();
-        let encrypted_random_session_key = EncryptedRandomSessionKey::from(vec![
+        let encrypted_random_session_key: EncryptedRandomSessionKey = [
             0x4c, 0xd7, 0xbb, 0x57, 0xd6, 0x97, 0xef, 0x9b, 0x54, 0x9f, 0x02, 0xb8, 0xf9, 0xb3,
             0x78, 0x64,
-        ]);
+        ]
+        .into();
         pretty_assertions::assert_eq!(
             encrypted_random_session_key,
             encrypt_random_session_key(&flags, &key_exchange_key, Some(RANDOM_SESSION_KEY.into()))

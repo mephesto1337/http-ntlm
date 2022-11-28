@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Lmv1Challenge {
     pub response: Response24,
 }
@@ -43,7 +43,7 @@ impl Lmv1Challenge {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Lmv2Challenge {
     pub response: Response16,
     pub challenge_from_client: ClientChallenge,
@@ -98,7 +98,7 @@ impl<'a> Wire<'a> for Lmv2Challenge {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LmChallenge {
     V1(Lmv1Challenge),
     V2(Lmv2Challenge),

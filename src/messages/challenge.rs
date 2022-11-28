@@ -1,28 +1,27 @@
 use std::env;
-use std::fmt;
 
 use nom::bytes::complete::tag;
-use nom::combinator::verify;
+use nom::combinator::{cond, verify};
 use nom::error::context;
 use nom::number::complete::{le_u32, le_u64};
 use nom::sequence::{preceded, tuple};
 
 use crate::messages::{
     flags::{self, Flags},
-    structures::{AvPair, FileTime, MsvAvFlags, ServerChallenge, SingleHostData},
+    structures::{AvPair, FileTime, MsvAvFlags, ServerChallenge, SingleHostData, Version},
     utils::{write_u32, write_u64},
-    Field, Version, Wire, SIGNATURE,
+    Field, Wire, SIGNATURE,
 };
 
 const MESSAGE_TYPE: u32 = 0x00000002;
 
-#[derive(PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Challenge {
     target_name: Option<String>,
     pub negociate_flags: Flags,
     pub server_challenge: ServerChallenge,
     pub(crate) target_infos: Vec<AvPair>,
-    pub version: Version,
+    pub version: Option<Version>,
 }
 
 impl Challenge {
@@ -137,17 +136,6 @@ impl Default for Challenge {
     }
 }
 
-impl fmt::Debug for Challenge {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Challenge")
-            .field("target_name", &self.target_name)
-            .field("negociate_flags", &self.negociate_flags)
-            .field("server_challenge", &self.server_challenge)
-            .field("target_infos", &self.target_infos)
-            .finish()
-    }
-}
-
 impl<'a> Wire<'a> for Challenge {
     fn serialize_into<W>(&self, writer: &mut W) -> std::io::Result<usize>
     where
@@ -159,9 +147,9 @@ impl<'a> Wire<'a> for Challenge {
         payload.resize(PAYLOAD_OFFSET, 0);
         let mut written = 0;
 
-        self.version.serialize_into(&mut payload)?;
-
-        payload.extend_from_slice(&self.version[..]);
+        if let Some(ref version) = self.version {
+            version.serialize_into(&mut payload).unwrap();
+        }
 
         writer.write_all(&SIGNATURE[..])?;
         written += &SIGNATURE[..].len();
@@ -188,15 +176,8 @@ impl<'a> Wire<'a> for Challenge {
         #[cfg(feature = "strict")]
         let parse_reserved = verify(parse_reserved, |reserved| *reserved == 0);
         let (
-            _rest,
-            (
-                target_name_field,
-                negociate_flags,
-                server_challenge,
-                _reserved,
-                target_infos_field,
-                version,
-            ),
+            rest,
+            (target_name_field, negociate_flags, server_challenge, _reserved, target_infos_field),
         ) = context(
             "Challenge",
             preceded(
@@ -207,15 +188,18 @@ impl<'a> Wire<'a> for Challenge {
                     ServerChallenge::deserialize,
                     context("reserved", parse_reserved),
                     context("target_infos_field", Field::deserialize),
-                    context("version", Version::deserialize),
                 )),
             ),
         )(input)?;
+        let (_, version) = cond(
+            negociate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_VERSION),
+            context("version", Version::deserialize),
+        )(rest)?;
 
         let target_name = target_name_field.get_data_if(
             "target_name",
             input,
-            negociate_flags.has_flag(flags::NTLMSSP_REQUEST_TARGET),
+            negociate_flags.has_flag(flags::NTLMSSP_REQUEST_TARGET) || true,
         )?;
         let target_infos = target_infos_field.get_many_if("target_infos", input, true)?;
 
@@ -246,54 +230,68 @@ impl<'a> Wire<'a> for Challenge {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::messages::flags::tests::{FLAGS_NTLMV1, FLAGS_NTLMV2};
 
     #[test]
-    fn decode_nlmp() {
-        env_logger::init();
-        let raw_message = include_bytes!("tests/nlmp/challenge.raw");
+    fn decode_ntlmv1() {
+        let raw_message = &[
+            0x4e, 0x54, 0x4c, 0x4d, 0x53, 0x53, 0x50, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0c, 0x00,
+            0x0c, 0x00, 0x38, 0x00, 0x00, 0x00, 0x33, 0x82, 0x0a, 0x82, 0x01, 0x23, 0x45, 0x67,
+            0x89, 0xab, 0xcd, 0xef, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x70, 0x17, 0x00, 0x00, 0x00, 0x0f,
+            0x53, 0x00, 0x65, 0x00, 0x72, 0x00, 0x76, 0x00, 0x65, 0x00, 0x72, 0x00,
+        ][..];
         let challenge_message = Challenge {
-            target_name: Some("CISCOLAB".into()),
-            negociate_flags: Flags(2726920709),
-            server_challenge: [0x9d, 0x65, 0xc1, 0x1b, 0x45, 0x40, 0xda, 0x2e].into(),
-            target_infos: vec![
-                AvPair::MsvAvNbDomainName("CISCOLAB".into()),
-                AvPair::MsvAvNbComputerName("POSEIDON".into()),
-                AvPair::MsvAvDnsDomainName("ciscolab.com".into()),
-                AvPair::MsvAvDnsComputerName("poseidon.ciscolab.com".into()),
-                AvPair::MsvAvEOL,
-            ],
-            version: Version::from([67, 0, 73, 0, 83, 0, 67, 0]),
+            target_name: Some("Server".into()),
+            negociate_flags: Flags(FLAGS_NTLMV1),
+            server_challenge: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef].into(),
+            target_infos: vec![],
+            version: Some(Version {
+                major: 6,
+                minor: 0,
+                build: 0x1770,
+                revision_count: 0x0f,
+            }),
         };
 
         let maybe_decoded_message =
             Challenge::deserialize::<nom::error::VerboseError<&[u8]>>(&raw_message[..]);
-        eprintln!("maybe_decoded_message = {:#x?}", &maybe_decoded_message);
         let (_, decoded_message) = maybe_decoded_message.unwrap();
         pretty_assertions::assert_eq!(decoded_message, challenge_message);
         eprintln!("challenge_message = {:#x?}", &challenge_message);
     }
 
     #[test]
-    fn decode_cisco() {
-        env_logger::init();
-        let raw_message = include_bytes!("tests/challenge.raw");
+    fn decode_ntlmv2() {
+        let raw_message = &[
+            0x4e, 0x54, 0x4c, 0x4d, 0x53, 0x53, 0x50, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0c, 0x00,
+            0x0c, 0x00, 0x38, 0x00, 0x00, 0x00, 0x33, 0x82, 0x8a, 0xe2, 0x01, 0x23, 0x45, 0x67,
+            0x89, 0xab, 0xcd, 0xef, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x24, 0x00,
+            0x24, 0x00, 0x44, 0x00, 0x00, 0x00, 0x06, 0x00, 0x70, 0x17, 0x00, 0x00, 0x00, 0x0f,
+            0x53, 0x00, 0x65, 0x00, 0x72, 0x00, 0x76, 0x00, 0x65, 0x00, 0x72, 0x00, 0x02, 0x00,
+            0x0c, 0x00, 0x44, 0x00, 0x6f, 0x00, 0x6d, 0x00, 0x61, 0x00, 0x69, 0x00, 0x6e, 0x00,
+            0x01, 0x00, 0x0c, 0x00, 0x53, 0x00, 0x65, 0x00, 0x72, 0x00, 0x76, 0x00, 0x65, 0x00,
+            0x72, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ][..];
         let challenge_message = Challenge {
-            target_name: Some("CISCOLAB".into()),
-            negociate_flags: Flags(2726920709),
-            server_challenge: [0x9d, 0x65, 0xc1, 0x1b, 0x45, 0x40, 0xda, 0x2e].into(),
+            target_name: Some("Server".into()),
+            negociate_flags: Flags(FLAGS_NTLMV2),
+            server_challenge: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef].into(),
             target_infos: vec![
-                AvPair::MsvAvNbDomainName("CISCOLAB".into()),
-                AvPair::MsvAvNbComputerName("POSEIDON".into()),
-                AvPair::MsvAvDnsDomainName("ciscolab.com".into()),
-                AvPair::MsvAvDnsComputerName("poseidon.ciscolab.com".into()),
+                AvPair::MsvAvNbDomainName("Domain".into()),
+                AvPair::MsvAvNbComputerName("Server".into()),
                 AvPair::MsvAvEOL,
             ],
-            version: Version::from([67, 0, 73, 0, 83, 0, 67, 0]),
+            version: Some(Version {
+                major: 6,
+                minor: 0,
+                build: 0x1770,
+                revision_count: 0x0f,
+            }),
         };
 
         let maybe_decoded_message =
             Challenge::deserialize::<nom::error::VerboseError<&[u8]>>(&raw_message[..]);
-        eprintln!("maybe_decoded_message = {:#x?}", &maybe_decoded_message);
         let (_, decoded_message) = maybe_decoded_message.unwrap();
         pretty_assertions::assert_eq!(decoded_message, challenge_message);
         eprintln!("challenge_message = {:#x?}", &challenge_message);

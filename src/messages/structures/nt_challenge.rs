@@ -12,7 +12,7 @@ use crate::messages::{
     NomError, Wire,
 };
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Ntv1Challenge {
     pub response: Response24,
 }
@@ -34,7 +34,7 @@ impl<'a> Wire<'a> for Ntv1Challenge {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Ntv2Challenge {
     pub timestamp: FileTime,
     pub challenge_from_client: ClientChallenge,
@@ -98,7 +98,7 @@ impl<'a> Wire<'a> for Ntv2Challenge {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NtChallenge {
     V1(Ntv1Challenge),
     V2(Ntv2Challenge),

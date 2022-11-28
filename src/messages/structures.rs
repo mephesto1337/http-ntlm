@@ -15,8 +15,8 @@ pub use lm_challenge::{LmChallenge, Lmv1Challenge, Lmv2Challenge};
 mod nt_challenge;
 pub use nt_challenge::{NtChallenge, Ntv1Challenge, Ntv2Challenge};
 
-mod encrypted_random_session_key;
-pub use encrypted_random_session_key::EncryptedRandomSessionKey;
+mod version;
+pub use version::Version;
 
 macro_rules! buffer_aliases {
     ($typename:ident, $name:literal, $size:expr) => {
@@ -90,6 +90,24 @@ buffer_aliases!(ClientChallenge, "client_challenge", 8usize);
 buffer_aliases!(SessionBaseKey, "session_base_key", 16usize);
 buffer_aliases!(KeyExchangeKey, "key_exchange_key", 16usize);
 buffer_aliases!(ExportedSessionKey, "exported_session_key", 16usize);
+buffer_aliases!(
+    EncryptedRandomSessionKey,
+    "encrypted_random_session_key",
+    16usize
+);
 buffer_aliases!(NtProofStr, "nt_proof_str", 16usize);
 buffer_aliases!(Response16, "response", 16usize);
 buffer_aliases!(Response24, "response", 24usize);
+buffer_aliases!(Mic, "mic", 16usize);
+
+impl From<ExportedSessionKey> for EncryptedRandomSessionKey {
+    fn from(e: ExportedSessionKey) -> Self {
+        Self(e.0)
+    }
+}
+
+impl From<SessionBaseKey> for KeyExchangeKey {
+    fn from(e: SessionBaseKey) -> Self {
+        Self(e.0)
+    }
+}

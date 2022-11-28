@@ -1,8 +1,5 @@
-use std::fmt;
-use std::mem::size_of_val;
-
-use nom::bytes::complete::{tag, take};
-use nom::combinator::verify;
+use nom::bytes::complete::tag;
+use nom::combinator::{cond, verify};
 use nom::error::context;
 use nom::number::complete::le_u32;
 use nom::sequence::{preceded, tuple};
@@ -11,15 +8,17 @@ use crate::{
     crypto::hmac_md5,
     messages::{
         flags::{self, Flags},
-        structures::{EncryptedRandomSessionKey, ExportedSessionKey, LmChallenge, NtChallenge},
+        structures::{
+            EncryptedRandomSessionKey, ExportedSessionKey, LmChallenge, Mic, NtChallenge, Version,
+        },
         utils::write_u32,
-        Challenge, Field, Negociate, NomError, Version, Wire, SIGNATURE,
+        Challenge, Field, Negotiate, NomError, Wire, SIGNATURE,
     },
 };
 
 const MESSAGE_TYPE: u32 = 0x00000003;
 
-#[derive(Default, PartialEq, Eq)]
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct Authenticate {
     pub lm_challenge_response: Option<LmChallenge>,
     pub nt_challenge_response: Option<NtChallenge>,
@@ -28,8 +27,8 @@ pub struct Authenticate {
     pub workstation: Option<String>,
     encrypted_random_session_key: Option<EncryptedRandomSessionKey>,
     pub negociate_flags: Flags,
-    pub version: Version,
-    pub mic: [u8; 16],
+    pub version: Option<Version>,
+    pub mic: Mic,
     pub exported_session_key: Option<ExportedSessionKey>,
 }
 
@@ -53,10 +52,10 @@ impl Authenticate {
         self.encrypted_random_session_key.as_ref()
     }
 
-    pub fn compute_mic(&mut self, negociate: &Negociate, challenge: &Challenge) {
+    pub fn compute_mic(&mut self, negociate: &Negotiate, challenge: &Challenge) {
         if let Some(exported_session_key) = self.exported_session_key.as_ref() {
             let mut buffer = Vec::with_capacity(256);
-            self.mic = [0u8; 16];
+            self.mic = Mic::default();
             negociate.serialize_into(&mut buffer).unwrap();
             challenge.serialize_into(&mut buffer).unwrap();
             self.serialize_into(&mut buffer).unwrap();
@@ -64,23 +63,6 @@ impl Authenticate {
         } else {
             log::warn!("Cannot compute MIC as there is no `exported_session_key`.");
         }
-    }
-}
-
-impl fmt::Debug for Authenticate {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Authenticate")
-            .field("lm_challenge_response", &self.lm_challenge_response)
-            .field("nt_challenge_response", &self.nt_challenge_response)
-            .field("domain", &self.domain)
-            .field("user", &self.user)
-            .field("workstation", &self.workstation)
-            .field(
-                "encrypted_random_session_key",
-                &self.encrypted_random_session_key,
-            )
-            .field("negociate_flags", &self.negociate_flags)
-            .finish()
     }
 }
 
@@ -94,7 +76,10 @@ impl<'a> Wire<'a> for Authenticate {
         let mut written = 0;
         let mut payload = Vec::with_capacity(PAYLOAD_OFFSET * 2);
         payload.resize(PAYLOAD_OFFSET, 0);
-        payload.extend_from_slice(&self.version[..]);
+        if let Some(ref version) = self.version {
+            version.serialize_into(&mut payload).unwrap();
+        }
+
         payload.extend_from_slice(&self.mic[..]);
 
         writer.write_all(&SIGNATURE[..])?;
@@ -123,10 +108,8 @@ impl<'a> Wire<'a> for Authenticate {
     where
         E: NomError<'a>,
     {
-        let mut mic = [0u8; 16];
-
         let (
-            _rest,
+            rest,
             (
                 lm_challenge_response_field,
                 nt_challenge_response_field,
@@ -135,28 +118,28 @@ impl<'a> Wire<'a> for Authenticate {
                 workstation_field,
                 encrypted_random_session_key_field,
                 negociate_flags,
-                version,
-                mic_data,
             ),
         ) = context(
             "Authenticate",
             preceded(
                 tuple((tag(SIGNATURE), verify(le_u32, |mt| *mt == MESSAGE_TYPE))),
                 tuple((
-                    Field::deserialize,
-                    Field::deserialize,
-                    Field::deserialize,
-                    Field::deserialize,
-                    Field::deserialize,
-                    Field::deserialize,
+                    context("lm_challenge", Field::deserialize),
+                    context("nt_challenge", Field::deserialize),
+                    context("domain_field", Field::deserialize),
+                    context("user_field", Field::deserialize),
+                    context("workstation_field", Field::deserialize),
+                    context("encrypted_random_session_key_field", Field::deserialize),
                     Flags::deserialize,
-                    Version::deserialize,
-                    take(size_of_val(&mic)),
                 )),
             ),
         )(input)?;
+        let (rest, version) = cond(
+            negociate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_VERSION),
+            context("Authenticate/version", Version::deserialize),
+        )(rest)?;
+        let (_, mic) = context("Authenticate/mic", Mic::deserialize)(rest)?;
 
-        mic.copy_from_slice(mic_data);
         let lm_challenge_response =
             lm_challenge_response_field.get_data_if("lm_challenge_response", input, true)?;
         let nt_challenge_response =
@@ -216,11 +199,17 @@ mod tests {
             workstation: Some("WANG_WENCHAO".into()),
             encrypted_random_session_key: None,
             negociate_flags: Flags(0xa2888205),
-            version: Version::from([0x5, 0x1, 0x28, 0xa, 0x0, 0x0, 0x0, 0xf]),
+            version: Some(Version {
+                major: 5,
+                minor: 1,
+                build: 0x0a28,
+                revision_count: 0x0f,
+            }),
             mic: [
                 0x65, 0x0, 0x78, 0x0, 0x61, 0x0, 0x6d, 0x0, 0x70, 0x0, 0x6c, 0x0, 0x65, 0x0, 0x61,
                 0x0,
-            ],
+            ]
+            .into(),
             exported_session_key: None,
         };
 
@@ -238,7 +227,8 @@ mod tests {
         let authenticate_message = Authenticate {
             lm_challenge_response: Some(LmChallenge::V2(Lmv2Challenge {
                 response: [
-                    101, 170, 123, 110, 103, 248, 74, 163, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0x86, 0xc3, 0x50, 0x97, 0xac, 0x9c, 0xec, 0x10, 0x25, 0x54, 0x76, 0x4a, 0x57,
+                    0xcc, 0xcc, 0x19,
                 ]
                 .into(),
                 challenge_from_client: [0, 0, 0, 0, 0, 0, 0, 0].into(),
@@ -256,11 +246,17 @@ mod tests {
             workstation: Some("WANG_WENCHAO".into()),
             encrypted_random_session_key: None,
             negociate_flags: Flags(0xa2888205),
-            version: Version::from([0x5, 0x1, 0x28, 0xa, 0x0, 0x0, 0x0, 0xf]),
+            version: Some(Version {
+                major: 5,
+                minor: 1,
+                build: 0x0a28,
+                revision_count: 0x0f,
+            }),
             mic: [
                 0x65, 0x0, 0x78, 0x0, 0x61, 0x0, 0x6d, 0x0, 0x70, 0x0, 0x6c, 0x0, 0x65, 0x0, 0x61,
                 0x0,
-            ],
+            ]
+            .into(),
             exported_session_key: None,
         };
 

@@ -15,12 +15,12 @@ use nom::number::complete::le_u32;
 /// the client and server, NTLMSSP_NEGOTIATE_56 and NTLMSSP_NEGOTIATE_128 will both be returned to
 /// the client. Clients and servers that set NTLMSSP_NEGOTIATE_SEAL SHOULD set NTLMSSP_NEGOTIATE_56
 /// if it is supported.
-pub const NTLMSSP_NEGOTIATE_56: u32 = 0;
+pub const NTLMSSP_NEGOTIATE_56: u32 = 31;
 
 /// f set, requests an explicit key exchange. This capability SHOULD be used because it improves
 /// security for message integrity or confidentiality. See sections 3.2.5.1.2, 3.2.5.2.1, and
 /// 3.2.5.2.2 for details.
-pub const NTLMSSP_NEGOTIATE_KEY_EXCH: u32 = 1;
+pub const NTLMSSP_NEGOTIATE_KEY_EXCH: u32 = 30;
 
 /// If set, requests 128-bit session key negotiation. If the client sends NTLMSSP_NEGOTIATE_128 to
 /// the server in the NEGOTIATE_MESSAGE, the server MUST return NTLMSSP_NEGOTIATE_128 to the client
@@ -29,37 +29,37 @@ pub const NTLMSSP_NEGOTIATE_KEY_EXCH: u32 = 1;
 /// NTLMSSP_NEGOTIATE_128 are requested and supported by the client and server,
 /// NTLMSSP_NEGOTIATE_56 and NTLMSSP_NEGOTIATE_128 will both be returned to the client. Clients and
 /// servers that set NTLMSSP_NEGOTIATE_SEAL SHOULD set NTLMSSP_NEGOTIATE_128 if it is supported.
-pub const NTLMSSP_NEGOTIATE_128: u32 = 2;
+pub const NTLMSSP_NEGOTIATE_128: u32 = 29;
 
 /// Unused bit that must be set to 0
-pub const R1: u32 = 3;
+pub const R1: u32 = 28;
 
 /// Unused bit that must be set to 0
-pub const R2: u32 = 4;
+pub const R2: u32 = 27;
 
 /// Unused bit that must be set to 0
-pub const R3: u32 = 5;
+pub const R3: u32 = 26;
 
 /// If set, requests the protocol version number. The data corresponding to this flag is provided
 /// in the Version field of the NEGOTIATE_MESSAGE, the CHALLENGE_MESSAGE, and the
 /// AUTHENTICATE_MESSAGE.<
-pub const NTLMSSP_NEGOTIATE_VERSION: u32 = 6;
+pub const NTLMSSP_NEGOTIATE_VERSION: u32 = 25;
 
 /// Unused bit that must be set to 0
-pub const R4: u32 = 7;
+pub const R4: u32 = 24;
 
 /// If set, indicates that the TargetInfo fields in the CHALLENGE_MESSAGE (section 2.2.1.2) are
 /// populated.
-pub const NTLMSSP_NEGOTIATE_TARGET_INFO: u32 = 8;
+pub const NTLMSSP_NEGOTIATE_TARGET_INFO: u32 = 23;
 
 /// If set, requests the usage of the LMOWF.
-pub const NTLMSSP_REQUEST_NON_NT_SESSION_KEY: u32 = 9;
+pub const NTLMSSP_REQUEST_NON_NT_SESSION_KEY: u32 = 22;
 
 /// Unused bit that must be set to 0
-pub const R5: u32 = 10;
+pub const R5: u32 = 21;
 
 /// If set, requests an identify level token.
-pub const NTLMSSP_NEGOTIATE_IDENTIFY: u32 = 11;
+pub const NTLMSSP_NEGOTIATE_IDENTIFY: u32 = 20;
 
 /// If set, requests usage of the NTLM v2 session security. NTLM v2 session security is a misnomer
 /// because it is not NTLM v2. It is NTLM v1 using the extended session security that is also in
@@ -69,22 +69,22 @@ pub const NTLMSSP_NEGOTIATE_IDENTIFY: u32 = 11;
 /// NTLM v2 authentication session key generation MUST be supported by both the client and the DC
 /// in order to be used, and extended session security signing and sealing requires support from
 /// the client and the server in order to be used.
-pub const NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY: u32 = 12;
+pub const NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY: u32 = 19;
 
 /// Unused bit that must be set to 0
-pub const R6: u32 = 13;
+pub const R6: u32 = 18;
 
 /// If set, TargetName MUST be a server name. The data corresponding to this flag is provided by
 /// the server in the TargetName field of the CHALLENGE_MESSAGE. If this bit is set, then
 /// NTLMSSP_TARGET_TYPE_DOMAIN MUST NOT be set. This flag MUST be ignored in the NEGOTIATE_MESSAGE
 /// and the AUTHENTICATE_MESSAGE.
-pub const NTLMSSP_TARGET_TYPE_SERVER: u32 = 14;
+pub const NTLMSSP_TARGET_TYPE_SERVER: u32 = 17;
 
 /// If set, TargetName MUST be a domain name. The data corresponding to this flag is
 /// provided by the server in the TargetName field of the CHALLENGE_MESSAGE. If set, then
 /// NTLMSSP_TARGET_TYPE_SERVER MUST NOT be set. This flag MUST be ignored in the
 /// NEGOTIATE_MESSAGE and the AUTHENTICATE_MESSAGE.
-pub const NTLMSSP_TARGET_TYPE_DOMAIN: u32 = 15;
+pub const NTLMSSP_TARGET_TYPE_DOMAIN: u32 = 16;
 
 /// If set, a session key is generated regardless of the states of NTLMSSP_NEGOTIATE_SIGN
 /// and NTLMSSP_NEGOTIATE_SEAL. A session key MUST always exist to generate the MIC (section
@@ -92,32 +92,32 @@ pub const NTLMSSP_TARGET_TYPE_DOMAIN: u32 = 15;
 /// NEGOTIATE_MESSAGE to the server and the CHALLENGE_MESSAGE to the client.
 /// NTLMSSP_NEGOTIATE_ALWAYS_SIGN is overridden by NTLMSSP_NEGOTIATE_SIGN and
 /// NTLMSSP_NEGOTIATE_SEAL, if they are supported.
-pub const NTLMSSP_NEGOTIATE_ALWAYS_SIGN: u32 = 16;
+pub const NTLMSSP_NEGOTIATE_ALWAYS_SIGN: u32 = 15;
 
 /// Unused bit that must be set to 0
-pub const R7: u32 = 17;
+pub const R7: u32 = 14;
 
 /// his flag indicates whether the Workstation field is present. If this flag is not set, the
 /// Workstation field MUST be ignored. If this flag is set, the length of the Workstation field
 /// specifies whether the workstation name is nonempty or not.
-pub const NTLMSSP_NEGOTIATE_OEM_WORKSTATION_SUPPLIED: u32 = 18;
+pub const NTLMSSP_NEGOTIATE_OEM_WORKSTATION_SUPPLIED: u32 = 13;
 
 /// If set, the domain name is provided (section 2.2.1.1).
-pub const NTLMSSP_NEGOTIATE_OEM_DOMAIN_SUPPLIED: u32 = 19;
+pub const NTLMSSP_NEGOTIATE_OEM_DOMAIN_SUPPLIED: u32 = 12;
 
 /// If set, the connection SHOULD be anonymous.<28>
-pub const NTLMSSP_ANONYMOUS: u32 = 20;
+pub const NTLMSSP_ANONYMOUS: u32 = 11;
 
 /// Unused bit that must be set to 0
-pub const R8: u32 = 21;
+pub const R8: u32 = 10;
 
 /// If set, requests usage of the NTLM v1 session security protocol.
 /// NTLMSSP_NEGOTIATE_NTLM MUST be set in the NEGOTIATE_MESSAGE to the server and the
 /// CHALLENGE_MESSAGE to the client.
-pub const NTLMSSP_NEGOTIATE_NTLM: u32 = 22;
+pub const NTLMSSP_NEGOTIATE_NTLM: u32 = 9;
 
 /// Unused bit that must be set to 0
-pub const R9: u32 = 23;
+pub const R9: u32 = 8;
 
 /// If set, requests LAN Manager (LM) session key computation. NTLMSSP_NEGOTIATE_LM_KEY and
 /// NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY are mutually exclusive. If both
@@ -126,33 +126,33 @@ pub const R9: u32 = 23;
 /// authentication session key generation MUST be supported by both the client and the DC in order
 /// to be used, and extended session security signing and sealing requires support from the client
 /// and the server to be used.
-pub const NTLMSSP_NEGOTIATE_LM_KEY: u32 = 24;
+pub const NTLMSSP_NEGOTIATE_LM_KEY: u32 = 7;
 
 /// If set, requests connectionless authentication. If NTLMSSP_NEGOTIATE_DATAGRAM is set, then
 /// NTLMSSP_NEGOTIATE_KEY_EXCH MUST always be set in the AUTHENTICATE_MESSAGE to the server and the
 /// CHALLENGE_MESSAGE to the client.
-pub const NTLMSSP_NEGOTIATE_DATAGRAM: u32 = 25;
+pub const NTLMSSP_NEGOTIATE_DATAGRAM: u32 = 6;
 
 /// If set, requests session key negotiation for message confidentiality. If the client sends
 /// NTLMSSP_NEGOTIATE_SEAL to the server in the NEGOTIATE_MESSAGE, the server MUST return
 /// NTLMSSP_NEGOTIATE_SEAL to the client in the CHALLENGE_MESSAGE. Clients and servers that set
 /// NTLMSSP_NEGOTIATE_SEAL SHOULD always set NTLMSSP_NEGOTIATE_56 and NTLMSSP_NEGOTIATE_128, if
 /// they are supported.
-pub const NTLMSSP_NEGOTIATE_SEAL: u32 = 26;
+pub const NTLMSSP_NEGOTIATE_SEAL: u32 = 5;
 
 /// If set, requests session key negotiation for message signatures. If the client sends
 /// NTLMSSP_NEGOTIATE_SIGN to the server in the NEGOTIATE_MESSAGE, the server MUST return
 /// NTLMSSP_NEGOTIATE_SIGN to the client in the CHALLENGE_MESSAGE.
-pub const NTLMSSP_NEGOTIATE_SIGN: u32 = 27;
+pub const NTLMSSP_NEGOTIATE_SIGN: u32 = 4;
 
 /// Unused bit that must be set to 0
-pub const R10: u32 = 28;
+pub const R10: u32 = 3;
 
 /// If set, a TargetName field of the CHALLENGE_MESSAGE (section 2.2.1.2) MUST be supplied.
-pub const NTLMSSP_REQUEST_TARGET: u32 = 29;
+pub const NTLMSSP_REQUEST_TARGET: u32 = 2;
 
 /// If set, requests OEM character set encoding. See bit [NTLMSSP_NEGOTIATE_UNICODE.] for details.
-pub const NTLM_NEGOTIATE_OEM: u32 = 30;
+pub const NTLM_NEGOTIATE_OEM: u32 = 1;
 
 /// If set, requests Unicode character set encoding. An alternate name for this field is
 /// NTLMSSP_NEGOTIATE_UNICODE.
@@ -160,7 +160,7 @@ pub const NTLM_NEGOTIATE_OEM: u32 = 30;
 /// * A==1: The choice of character set encoding MUST be Unicode.
 /// * A==0 and B==1: The choice of character set encoding MUST be OEM.
 /// * A==0 and B==0: The protocol MUST return SEC_E_INVALID_TOKEN.
-pub const NTLMSSP_NEGOTIATE_UNICODE: u32 = 31;
+pub const NTLMSSP_NEGOTIATE_UNICODE: u32 = 0;
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 #[repr(transparent)]
@@ -545,5 +545,51 @@ impl fmt::Debug for Flags {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+
+    pub const FLAGS_NTLMV1: u32 = (1 << NTLMSSP_NEGOTIATE_56)
+        | (1 << NTLMSSP_NEGOTIATE_VERSION)
+        | (1 << NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY)
+        | (1 << NTLMSSP_TARGET_TYPE_SERVER)
+        | (1 << NTLMSSP_NEGOTIATE_ALWAYS_SIGN)
+        | (1 << NTLMSSP_NEGOTIATE_NTLM)
+        | (1 << NTLMSSP_NEGOTIATE_SEAL)
+        | (1 << NTLMSSP_NEGOTIATE_SIGN)
+        | (1 << NTLM_NEGOTIATE_OEM)
+        | (1 << NTLMSSP_NEGOTIATE_UNICODE);
+
+    pub const FLAGS_NTLMV2: u32 = (1 << NTLMSSP_NEGOTIATE_KEY_EXCH)
+        | (1 << NTLMSSP_NEGOTIATE_56)
+        | (1 << NTLMSSP_NEGOTIATE_128)
+        | (1 << NTLMSSP_NEGOTIATE_VERSION)
+        | (1 << NTLMSSP_NEGOTIATE_TARGET_INFO)
+        | (1 << NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY)
+        | (1 << NTLMSSP_TARGET_TYPE_SERVER)
+        | (1 << NTLMSSP_NEGOTIATE_ALWAYS_SIGN)
+        | (1 << NTLMSSP_NEGOTIATE_NTLM)
+        | (1 << NTLMSSP_NEGOTIATE_SEAL)
+        | (1 << NTLMSSP_NEGOTIATE_SIGN)
+        | (1 << NTLM_NEGOTIATE_OEM)
+        | (1 << NTLMSSP_NEGOTIATE_UNICODE);
+
+    #[test]
+    fn ntlmv1() {
+        let flags = Flags(FLAGS_NTLMV1);
+        let input = &[0x33, 0x82, 0x0a, 0x82][..];
+
+        pretty_assertions::assert_eq!((&b""[..], flags), Flags::deserialize::<()>(input).unwrap());
+    }
+
+    #[test]
+    fn ntlmv2() {
+        let flags = Flags(FLAGS_NTLMV2);
+        let input = &[0x33, 0x82, 0x8a, 0xe2][..];
+
+        pretty_assertions::assert_eq!((&b""[..], flags), Flags::deserialize::<()>(input).unwrap());
     }
 }

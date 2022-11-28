@@ -107,16 +107,14 @@ pub mod authenticate;
 pub mod challenge;
 mod field;
 pub mod flags;
-pub mod negociate;
+pub mod negotiate;
 pub mod structures;
 mod unicode_string;
 mod utils;
-mod version;
 
 pub use authenticate::Authenticate;
 pub use challenge::Challenge;
 pub use flags::Flags;
-pub use negociate::Negociate;
+pub use negotiate::Negotiate;
 
 use field::Field;
-use version::Version;

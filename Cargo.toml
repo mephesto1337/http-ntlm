@@ -19,7 +19,14 @@ md4 = "0.10"
 md-5 = "0.10"
 hmac = "0.12"
 rc4 = "0.1"
+anyhow = "1"
+hex = "0.4"
+
+[target.'cfg(target_family = "windows")'.dependencies]
+windows = { version = "0.43", features = ["Win32_Security_Authentication_Identity", "Win32_Foundation", "Win32_Security_Credentials"] }
 
 [dev-dependencies]
 pretty_assertions = "1"
 base64 = "0.13"
+
+

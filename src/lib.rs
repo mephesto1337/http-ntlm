@@ -5,3 +5,6 @@ pub trait NtlmVersion {
 pub mod client;
 mod crypto;
 pub mod messages;
+
+#[cfg(target_family = "windows")]
+mod win;

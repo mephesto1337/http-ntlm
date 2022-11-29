@@ -13,9 +13,9 @@ use crate::messages::{
 
 const MESSAGE_TYPE: u32 = 0x00000001;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Negotiate {
-    pub negociate_flags: Flags,
+    pub negotiate_flags: Flags,
     domain_name: Option<String>,
     workstation: Option<String>,
     pub version: Option<Version>,
@@ -25,10 +25,10 @@ impl Negotiate {
     pub fn set_domain_name(&mut self, domain_name: Option<String>) -> &mut Self {
         self.domain_name = domain_name;
         if self.domain_name.is_some() {
-            self.negociate_flags
+            self.negotiate_flags
                 .set_flag(flags::NTLMSSP_NEGOTIATE_OEM_DOMAIN_SUPPLIED);
         } else {
-            self.negociate_flags
+            self.negotiate_flags
                 .clear_flag(flags::NTLMSSP_NEGOTIATE_OEM_DOMAIN_SUPPLIED);
         }
         self
@@ -41,10 +41,10 @@ impl Negotiate {
     pub fn set_workstation(&mut self, workstation: Option<String>) -> &mut Self {
         self.workstation = workstation;
         if self.workstation.is_some() {
-            self.negociate_flags
+            self.negotiate_flags
                 .set_flag(flags::NTLMSSP_NEGOTIATE_OEM_WORKSTATION_SUPPLIED);
         } else {
-            self.negociate_flags
+            self.negotiate_flags
                 .clear_flag(flags::NTLMSSP_NEGOTIATE_OEM_WORKSTATION_SUPPLIED);
         }
         self
@@ -52,17 +52,6 @@ impl Negotiate {
 
     pub fn get_workstation(&self) -> Option<&String> {
         self.workstation.as_ref()
-    }
-}
-
-impl Default for Negotiate {
-    fn default() -> Self {
-        Self {
-            negociate_flags: Flags::default(),
-            domain_name: None,
-            workstation: None,
-            version: Default::default(),
-        }
     }
 }
 
@@ -84,14 +73,14 @@ impl<'a> Wire<'a> for Negotiate {
         writer.write_all(&SIGNATURE[..])?;
         written += SIGNATURE.len();
         written += write_u32(writer, MESSAGE_TYPE)?;
-        written += self.negociate_flags.serialize_into(writer)?;
+        written += self.negotiate_flags.serialize_into(writer)?;
         written += Field::append(self.domain_name.as_ref(), &mut payload, writer)?;
         written += Field::append(self.workstation.as_ref(), &mut payload, writer)?;
 
         assert_eq!(written, PAYLOAD_OFFSET);
 
         writer.write_all(&payload[PAYLOAD_OFFSET..])?;
-        written += payload.len();
+        written += payload[PAYLOAD_OFFSET..].len();
 
         Ok(written)
     }
@@ -100,7 +89,7 @@ impl<'a> Wire<'a> for Negotiate {
     where
         E: super::NomError<'a>,
     {
-        let (rest, (negociate_flags, domain_name_field, workstation_field)) = context(
+        let (rest, (negotiate_flags, domain_name_field, workstation_field)) = context(
             "Negotiate",
             preceded(
                 tuple((tag(SIGNATURE), verify(le_u32, |mt| *mt == MESSAGE_TYPE))),
@@ -113,25 +102,25 @@ impl<'a> Wire<'a> for Negotiate {
         )(input)?;
 
         let (_, version) = cond(
-            dbg!(negociate_flags).has_flag(flags::NTLMSSP_NEGOTIATE_VERSION),
+            negotiate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_VERSION),
             context("Negotiate/version", Version::deserialize),
         )(rest)?;
 
         let domain_name = domain_name_field.get_data_if(
             "domain",
             input,
-            negociate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_OEM_DOMAIN_SUPPLIED) || true,
+            negotiate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_OEM_DOMAIN_SUPPLIED) || true,
         )?;
         let workstation = workstation_field.get_data_if(
             "workstation",
             input,
-            negociate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_OEM_WORKSTATION_SUPPLIED) || true,
+            negotiate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_OEM_WORKSTATION_SUPPLIED) || true,
         )?;
 
         Ok((
             &b""[..],
             Self {
-                negociate_flags,
+                negotiate_flags,
                 domain_name,
                 workstation,
                 version,
@@ -148,7 +137,7 @@ mod tests {
     #[test]
     fn decode() {
         let negociate_message = Negotiate {
-            negociate_flags: Flags(0),
+            negotiate_flags: Flags(0),
             domain_name: Some("CONTOSIO".into()),
             workstation: Some("PC1".into()),
             version: None,
@@ -171,7 +160,7 @@ mod tests {
     #[test]
     fn encode() {
         let negociate_message = Negotiate {
-            negociate_flags: Flags(crate::messages::flags::tests::FLAGS_NTLMV2),
+            negotiate_flags: Flags(crate::messages::flags::tests::FLAGS_NTLMV2),
             domain_name: Some("CONTOSIO".into()),
             workstation: Some("PC1".into()),
             version: Some(Version {

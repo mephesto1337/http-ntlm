@@ -9,7 +9,8 @@ use crate::{
     messages::{
         flags::{self, Flags},
         structures::{
-            EncryptedRandomSessionKey, ExportedSessionKey, LmChallenge, Mic, NtChallenge, Version,
+            EncryptedRandomSessionKey, ExportedSessionKey, LmChallenge, Lmv1Challenge,
+            Lmv2Challenge, Mic, NtChallenge, Version,
         },
         utils::write_u32,
         Challenge, Field, Negotiate, NomError, Wire, SIGNATURE,
@@ -26,7 +27,7 @@ pub struct Authenticate {
     pub user: Option<String>,
     pub workstation: Option<String>,
     encrypted_random_session_key: Option<EncryptedRandomSessionKey>,
-    pub negociate_flags: Flags,
+    pub negotiate_flags: Flags,
     pub version: Option<Version>,
     pub mic: Mic,
     pub exported_session_key: Option<ExportedSessionKey>,
@@ -39,10 +40,10 @@ impl Authenticate {
     ) -> &mut Self {
         self.encrypted_random_session_key = encrypted_random_session_key;
         if self.encrypted_random_session_key.is_some() {
-            self.negociate_flags
+            self.negotiate_flags
                 .set_flag(flags::NTLMSSP_NEGOTIATE_KEY_EXCH);
         } else {
-            self.negociate_flags
+            self.negotiate_flags
                 .clear_flag(flags::NTLMSSP_NEGOTIATE_KEY_EXCH);
         }
         self
@@ -95,11 +96,11 @@ impl<'a> Wire<'a> for Authenticate {
             &mut payload,
             writer,
         )?;
-        written += self.negociate_flags.serialize_into(writer)?;
+        written += self.negotiate_flags.serialize_into(writer)?;
 
         assert_eq!(written, PAYLOAD_OFFSET);
         writer.write_all(&payload[PAYLOAD_OFFSET..])?;
-        written += payload.len();
+        written += payload[PAYLOAD_OFFSET..].len();
 
         Ok(written)
     }
@@ -117,7 +118,7 @@ impl<'a> Wire<'a> for Authenticate {
                 user_field,
                 workstation_field,
                 encrypted_random_session_key_field,
-                negociate_flags,
+                negotiate_flags,
             ),
         ) = context(
             "Authenticate",
@@ -135,13 +136,20 @@ impl<'a> Wire<'a> for Authenticate {
             ),
         )(input)?;
         let (rest, version) = cond(
-            negociate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_VERSION),
+            negotiate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_VERSION),
             context("Authenticate/version", Version::deserialize),
         )(rest)?;
         let (_, mic) = context("Authenticate/mic", Mic::deserialize)(rest)?;
 
-        let lm_challenge_response =
-            lm_challenge_response_field.get_data_if("lm_challenge_response", input, true)?;
+        let lm_challenge_response = if negotiate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_NTLM) {
+            lm_challenge_response_field
+                .get_data_if::<Lmv1Challenge, E>("lmv1_challenge_response", input, true)?
+                .map(|c| c.into())
+        } else {
+            lm_challenge_response_field
+                .get_data_if::<Lmv2Challenge, E>("lmv2_challenge_response", input, true)?
+                .map(|c| c.into())
+        };
         let nt_challenge_response =
             nt_challenge_response_field.get_data_if("nt_challenge_response", input, true)?;
         let domain = domain_field.get_data_if("domain", input, true)?;
@@ -150,7 +158,7 @@ impl<'a> Wire<'a> for Authenticate {
         let encrypted_random_session_key = encrypted_random_session_key_field.get_data_if(
             "encrypted_random_session_key",
             input,
-            negociate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_KEY_EXCH),
+            negotiate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_KEY_EXCH),
         )?;
 
         Ok((
@@ -162,7 +170,7 @@ impl<'a> Wire<'a> for Authenticate {
                 user,
                 workstation,
                 encrypted_random_session_key,
-                negociate_flags,
+                negotiate_flags,
                 version,
                 mic,
                 exported_session_key: None,
@@ -198,7 +206,7 @@ mod tests {
             user: Some("administrator".into()),
             workstation: Some("WANG_WENCHAO".into()),
             encrypted_random_session_key: None,
-            negociate_flags: Flags(0xa2888205),
+            negotiate_flags: Flags(0xa2888205),
             version: Some(Version {
                 major: 5,
                 minor: 1,
@@ -245,7 +253,7 @@ mod tests {
             user: Some("administrator".into()),
             workstation: Some("WANG_WENCHAO".into()),
             encrypted_random_session_key: None,
-            negociate_flags: Flags(0xa2888205),
+            negotiate_flags: Flags(0xa2888205),
             version: Some(Version {
                 major: 5,
                 minor: 1,

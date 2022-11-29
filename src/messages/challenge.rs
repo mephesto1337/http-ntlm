@@ -15,10 +15,10 @@ use crate::messages::{
 
 const MESSAGE_TYPE: u32 = 0x00000002;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Challenge {
     target_name: Option<String>,
-    pub negociate_flags: Flags,
+    pub negotiate_flags: Flags,
     pub server_challenge: ServerChallenge,
     pub(crate) target_infos: Vec<AvPair>,
     pub version: Option<Version>,
@@ -37,7 +37,7 @@ impl Challenge {
         if self.target_infos.is_empty() {
             self.target_infos.push(info);
             self.target_infos.push(AvPair::MsvAvEOL);
-            self.negociate_flags
+            self.negotiate_flags
                 .set_flag(flags::NTLMSSP_NEGOTIATE_TARGET_INFO);
         } else {
             let index = self.target_infos.len() - 1;
@@ -121,21 +121,6 @@ impl Challenge {
     }
 }
 
-impl Default for Challenge {
-    fn default() -> Self {
-        let mut me = Self {
-            target_name: None,
-            negociate_flags: Flags::default(),
-            server_challenge: Default::default(),
-            target_infos: Vec::new(),
-            version: Default::default(),
-        };
-
-        me.fill_from_env();
-        me
-    }
-}
-
 impl<'a> Wire<'a> for Challenge {
     fn serialize_into<W>(&self, writer: &mut W) -> std::io::Result<usize>
     where
@@ -155,14 +140,14 @@ impl<'a> Wire<'a> for Challenge {
         written += &SIGNATURE[..].len();
         written += write_u32(writer, MESSAGE_TYPE)?;
         written += Field::append(self.target_name.as_ref(), &mut payload, writer)?;
-        written += self.negociate_flags.serialize_into(writer)?;
+        written += self.negotiate_flags.serialize_into(writer)?;
         written += self.server_challenge.serialize_into(writer)?;
         written += write_u64(writer, 0)?;
         written += Field::append_many(&self.target_infos, &mut payload, writer)?;
 
         assert_eq!(written, PAYLOAD_OFFSET);
         writer.write_all(&payload[PAYLOAD_OFFSET..])?;
-        written += payload.len();
+        written += payload[PAYLOAD_OFFSET..].len();
 
         Ok(written)
     }
@@ -177,14 +162,14 @@ impl<'a> Wire<'a> for Challenge {
         let parse_reserved = verify(parse_reserved, |reserved| *reserved == 0);
         let (
             rest,
-            (target_name_field, negociate_flags, server_challenge, _reserved, target_infos_field),
+            (target_name_field, negotiate_flags, server_challenge, _reserved, target_infos_field),
         ) = context(
             "Challenge",
             preceded(
                 tuple((tag(SIGNATURE), verify(le_u32, |mt| *mt == MESSAGE_TYPE))),
                 tuple((
                     context("target_name_field", Field::deserialize),
-                    context("negociate_flags", Flags::deserialize),
+                    context("negotiate_flags", Flags::deserialize),
                     ServerChallenge::deserialize,
                     context("reserved", parse_reserved),
                     context("target_infos_field", Field::deserialize),
@@ -192,14 +177,14 @@ impl<'a> Wire<'a> for Challenge {
             ),
         )(input)?;
         let (_, version) = cond(
-            negociate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_VERSION),
+            negotiate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_VERSION),
             context("version", Version::deserialize),
         )(rest)?;
 
         let target_name = target_name_field.get_data_if(
             "target_name",
             input,
-            negociate_flags.has_flag(flags::NTLMSSP_REQUEST_TARGET) || true,
+            negotiate_flags.has_flag(flags::NTLMSSP_REQUEST_TARGET) || true,
         )?;
         let target_infos = target_infos_field.get_many_if("target_infos", input, true)?;
 
@@ -218,7 +203,7 @@ impl<'a> Wire<'a> for Challenge {
             &b""[..],
             Self {
                 target_name,
-                negociate_flags,
+                negotiate_flags,
                 server_challenge,
                 target_infos,
                 version,
@@ -243,7 +228,7 @@ mod tests {
         ][..];
         let challenge_message = Challenge {
             target_name: Some("Server".into()),
-            negociate_flags: Flags(FLAGS_NTLMV1),
+            negotiate_flags: Flags(FLAGS_NTLMV1),
             server_challenge: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef].into(),
             target_infos: vec![],
             version: Some(Version {
@@ -275,7 +260,7 @@ mod tests {
         ][..];
         let challenge_message = Challenge {
             target_name: Some("Server".into()),
-            negociate_flags: Flags(FLAGS_NTLMV2),
+            negotiate_flags: Flags(FLAGS_NTLMV2),
             server_challenge: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef].into(),
             target_infos: vec![
                 AvPair::MsvAvNbDomainName("Domain".into()),

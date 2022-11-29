@@ -18,6 +18,9 @@ pub use nt_challenge::{NtChallenge, Ntv1Challenge, Ntv2Challenge};
 mod version;
 pub use version::Version;
 
+mod signature;
+pub use signature::MessageSignature;
+
 macro_rules! buffer_aliases {
     ($typename:ident, $name:literal, $size:expr) => {
         #[derive(Default, PartialEq, Eq, Clone)]
@@ -99,6 +102,7 @@ buffer_aliases!(NtProofStr, "nt_proof_str", 16usize);
 buffer_aliases!(Response16, "response", 16usize);
 buffer_aliases!(Response24, "response", 24usize);
 buffer_aliases!(Mic, "mic", 16usize);
+buffer_aliases!(RandomPad, "random_pad", 4usize);
 
 impl From<ExportedSessionKey> for EncryptedRandomSessionKey {
     fn from(e: ExportedSessionKey) -> Self {

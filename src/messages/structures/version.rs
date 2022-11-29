@@ -65,6 +65,17 @@ impl<'a> Wire<'a> for Version {
     }
 }
 
+impl From<(u8, u8, u16)> for Version {
+    fn from((major, minor, build): (u8, u8, u16)) -> Self {
+        Self {
+            major,
+            minor,
+            build,
+            revision_count: NTLMSSP_REVISION_W2K3,
+        }
+    }
+}
+
 impl TryFrom<[u8; 8]> for Version {
     type Error = ();
 

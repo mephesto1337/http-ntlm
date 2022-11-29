@@ -3,6 +3,7 @@ use std::io;
 use std::ops::{Deref, DerefMut};
 use std::string::FromUtf16Error;
 
+use nom::branch::alt;
 use nom::combinator::{map, map_opt, opt, verify};
 use nom::error::context;
 use nom::multi::fold_many0;
@@ -108,7 +109,10 @@ impl<'a> Wire<'a> for String {
     {
         context(
             "UTF-16 string",
-            terminated(
+            alt((
+                map_opt(nom::combinator::rest, |b| {
+                    std::str::from_utf8(b).map(|s| s.to_owned()).ok()
+                }),
                 fold_many0(
                     map_opt(le_u16, |b| {
                         if b == 0 {
@@ -123,8 +127,7 @@ impl<'a> Wire<'a> for String {
                         acc
                     },
                 ),
-                opt(verify(le_u16, |b| *b == 0)),
-            ),
+            )),
         )(input)
     }
 }

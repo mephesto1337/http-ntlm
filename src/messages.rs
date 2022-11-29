@@ -5,9 +5,9 @@ macro_rules! generate_setter_getter {
         pub fn $set(&mut self, $field: Option<impl Into<$type>>) -> &mut Self {
             self.$field = $field.map(|s| s.into());
             if self.$field.is_some() {
-                self.negociate_flags.set_flag($flag);
+                self.negotiate_flags.set_flag($flag);
             } else {
-                self.negociate_flags.clear_flag($flag);
+                self.negotiate_flags.clear_flag($flag);
             }
             self
         }
@@ -21,7 +21,7 @@ macro_rules! generate_setter_getter {
                 return self;
             }
             self.$field.push(item);
-            self.negociate_flags.set_flag($flag);
+            self.negotiate_flags.set_flag($flag);
             self
         }
 
@@ -36,14 +36,14 @@ macro_rules! generate_setter_getter {
             if let Some(index) = found {
                 self.$field.remove(index);
                 if self.$field.is_empty() {
-                    self.negociate_flags.clear_flag($flag);
+                    self.negotiate_flags.clear_flag($flag);
                 }
             }
             self
         }
         pub fn $clear(&mut self) -> &mut Self {
             self.$field.clear();
-            self.negociate_flags.clear_flag($flag);
+            self.negotiate_flags.clear_flag($flag);
             self
         }
         pub fn $get(&self) -> &[$type] {
@@ -68,8 +68,10 @@ pub(super) trait Wire<'a>: Sized {
         W: Write;
     fn serialize(&self) -> Vec<u8> {
         let mut data = Vec::new();
-        self.serialize_into(&mut data)
+        let size = self
+            .serialize_into(&mut data)
             .expect("Writing to a Vec should never failed");
+        debug_assert_eq!(size, data.len());
         data
     }
 

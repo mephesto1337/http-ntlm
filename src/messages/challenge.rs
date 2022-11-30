@@ -9,6 +9,7 @@ use nom::sequence::{preceded, tuple};
 use crate::messages::{
     flags::{self, Flags},
     structures::{AvPair, FileTime, MsvAvFlags, ServerChallenge, SingleHostData, Version},
+    unicode_string::UnicodeString,
     utils::{write_u32, write_u64},
     Field, Wire, SIGNATURE,
 };
@@ -17,7 +18,7 @@ const MESSAGE_TYPE: u32 = 0x00000002;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Challenge {
-    target_name: Option<String>,
+    target_name: Option<UnicodeString>,
     pub negotiate_flags: Flags,
     pub server_challenge: ServerChallenge,
     pub(crate) target_infos: Vec<AvPair>,
@@ -28,7 +29,7 @@ impl Challenge {
     generate_setter_getter!(
         target_name,
         flags::NTLMSSP_REQUEST_TARGET,
-        String,
+        UnicodeString,
         set_target_name,
         get_target_name
     );

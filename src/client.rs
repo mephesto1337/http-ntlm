@@ -192,8 +192,8 @@ where
         auth.negotiate_flags = challenge.negotiate_flags;
         auth.lm_challenge_response = Some(lm_challenge.into());
         auth.nt_challenge_response = Some(nt_challenge.into());
-        auth.domain = Some(self.domain.to_owned());
-        auth.user = Some(self.username.to_owned());
+        auth.domain = Some(self.domain.clone().into());
+        auth.user = Some(self.username.clone().into());
         auth.workstation = None;
         auth.set_encrypted_random_session_key(Some(encrypted_random_session_key));
         // auth.mic = mic;
@@ -232,8 +232,8 @@ where
         let mut auth = Authenticate::default();
         auth.lm_challenge_response = Some(lm_challenge.into());
         auth.nt_challenge_response = Some(nt_challenge.into());
-        auth.domain = Some(self.domain.to_owned());
-        auth.user = Some(self.username.to_owned());
+        auth.domain = Some(self.domain.clone().into());
+        auth.user = Some(self.username.clone().into());
         auth.workstation = None;
         auth.set_encrypted_random_session_key(Some(encrypted_random_session_key));
         auth.exported_session_key = Some(exported_session_key);
@@ -274,7 +274,7 @@ where
             3 | 4 | 5 => self.send_authenticate_ntlmv2(client_challenge),
             _ => unreachable!("Invalid version"),
         };
-        if let Some(workstation) = self.workstation.as_ref().map(|w| w.clone()) {
+        if let Some(workstation) = self.workstation.as_ref().map(|w| w.clone().into()) {
             auth.workstation = Some(workstation);
         }
         if let Some(v) = self.version.as_ref().map(|v| v.clone()) {

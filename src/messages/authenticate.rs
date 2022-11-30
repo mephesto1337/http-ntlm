@@ -12,6 +12,7 @@ use crate::{
             EncryptedRandomSessionKey, ExportedSessionKey, LmChallenge, Lmv1Challenge,
             Lmv2Challenge, Mic, NtChallenge, Version,
         },
+        unicode_string::UnicodeString,
         utils::write_u32,
         Challenge, Field, Negotiate, NomError, Wire, SIGNATURE,
     },
@@ -23,9 +24,9 @@ const MESSAGE_TYPE: u32 = 0x00000003;
 pub struct Authenticate {
     pub lm_challenge_response: Option<LmChallenge>,
     pub nt_challenge_response: Option<NtChallenge>,
-    pub domain: Option<String>,
-    pub user: Option<String>,
-    pub workstation: Option<String>,
+    pub domain: Option<UnicodeString>,
+    pub user: Option<UnicodeString>,
+    pub workstation: Option<UnicodeString>,
     encrypted_random_session_key: Option<EncryptedRandomSessionKey>,
     pub negotiate_flags: Flags,
     pub version: Option<Version>,
@@ -143,11 +144,15 @@ impl<'a> Wire<'a> for Authenticate {
 
         let lm_challenge_response = if negotiate_flags.has_flag(flags::NTLMSSP_NEGOTIATE_NTLM) {
             lm_challenge_response_field
-                .get_data_if::<Lmv1Challenge, E>("lmv1_challenge_response", input, true)?
+                .get_data_if::<Lmv1Challenge, E>("lmv1_challenge_response", input, true)
+                .ok()
+                .flatten()
                 .map(|c| c.into())
         } else {
             lm_challenge_response_field
-                .get_data_if::<Lmv2Challenge, E>("lmv2_challenge_response", input, true)?
+                .get_data_if::<Lmv2Challenge, E>("lmv2_challenge_response", input, true)
+                .ok()
+                .flatten()
                 .map(|c| c.into())
         };
         let nt_challenge_response =

@@ -166,6 +166,29 @@ mod tests {
 
     #[test]
     fn enum_pkgs() {
+        let mut package_count = 0;
+        let mut packages_ptr = ptr::null_mut();
+
+        let packages = unsafe {
+            EnumerateSecurityPackagesA(
+                ptr::addr_of_mut!(package_count),
+                ptr::addr_of_mut!(packages_ptr),
+            )
+            .unwrap();
+            std::slice::from_raw_parts(packages_ptr, package_count as usize)
+        };
+        for p in packages {
+            let name = unsafe { CStr::from_ptr(p.Name).to_str().unwrap() };
+            let desc = unsafe { CStr::from_ptr(p.Comment).to_str().unwrap() };
+            println!("{}: {}", name, desc);
+        }
+        unsafe {
+            FreeContextBuffer(packages_ptr.cast()).unwrap();
+        }
+    }
+
+    #[test]
+    fn challenge() {
         let mut clnt = WinClient::new("test").unwrap();
         let buf = clnt.negotiate().unwrap();
         let (_, n) = Negotiate::deserialize::<nom::error::VerboseError<&[u8]>>(buf).unwrap();

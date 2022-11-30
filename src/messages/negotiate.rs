@@ -7,6 +7,7 @@ use nom::sequence::{preceded, tuple};
 use crate::messages::{
     flags::{self, Flags},
     structures::Version,
+    unicode_string::OEMString,
     utils::write_u32,
     Field, Wire, SIGNATURE,
 };
@@ -16,14 +17,14 @@ const MESSAGE_TYPE: u32 = 0x00000001;
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Negotiate {
     pub negotiate_flags: Flags,
-    domain_name: Option<String>,
-    workstation: Option<String>,
+    domain_name: Option<OEMString>,
+    workstation: Option<OEMString>,
     pub version: Option<Version>,
 }
 
 impl Negotiate {
     pub fn set_domain_name(&mut self, domain_name: Option<String>) -> &mut Self {
-        self.domain_name = domain_name;
+        self.domain_name = domain_name.map(|d| d.into());
         if self.domain_name.is_some() {
             self.negotiate_flags
                 .set_flag(flags::NTLMSSP_NEGOTIATE_OEM_DOMAIN_SUPPLIED);
@@ -35,11 +36,11 @@ impl Negotiate {
     }
 
     pub fn get_domain_name(&self) -> Option<&String> {
-        self.domain_name.as_ref()
+        self.domain_name.as_ref().map(|s| &**s)
     }
 
     pub fn set_workstation(&mut self, workstation: Option<String>) -> &mut Self {
-        self.workstation = workstation;
+        self.workstation = workstation.map(|w| w.into());
         if self.workstation.is_some() {
             self.negotiate_flags
                 .set_flag(flags::NTLMSSP_NEGOTIATE_OEM_WORKSTATION_SUPPLIED);
@@ -51,7 +52,7 @@ impl Negotiate {
     }
 
     pub fn get_workstation(&self) -> Option<&String> {
-        self.workstation.as_ref()
+        self.workstation.as_ref().map(|w| &**w)
     }
 }
 

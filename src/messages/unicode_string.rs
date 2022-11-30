@@ -1,77 +1,91 @@
 use std::fmt;
 use std::io;
 use std::ops::{Deref, DerefMut};
-use std::string::FromUtf16Error;
 
-use nom::branch::alt;
-use nom::combinator::{map, map_opt, opt, verify};
+use nom::combinator::{map, map_opt};
 use nom::error::context;
 use nom::multi::fold_many0;
 use nom::number::complete::le_u16;
-use nom::sequence::terminated;
 
 use crate::messages::{utils::write_u16, Wire};
 
-pub struct UnicodeString(String);
+macro_rules! impl_string {
+    ($typename:ident) => {
+        #[derive(PartialEq, Eq, Default, Clone)]
+        pub struct $typename(String);
 
-impl Deref for UnicodeString {
-    type Target = String;
+        impl Deref for $typename {
+            type Target = String;
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl DerefMut for $typename {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+
+        impl From<String> for $typename {
+            fn from(s: String) -> Self {
+                Self(s)
+            }
+        }
+
+        impl From<&str> for $typename {
+            fn from(s: &str) -> Self {
+                Self(s.to_owned())
+            }
+        }
+
+        impl From<$typename> for String {
+            fn from(s: $typename) -> Self {
+                s.0
+            }
+        }
+
+        impl fmt::Display for $typename {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                fmt::Display::fmt(&self.0, f)
+            }
+        }
+
+        impl fmt::Debug for $typename {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                fmt::Debug::fmt(&self.0, f)
+            }
+        }
+    };
 }
 
-impl DerefMut for UnicodeString {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
+impl_string!(UnicodeString);
+impl_string!(OEMString);
 
-impl From<String> for UnicodeString {
-    fn from(s: String) -> Self {
-        Self(s)
-    }
-}
-
-impl From<&str> for UnicodeString {
-    fn from(s: &str) -> Self {
-        Self(s.to_owned())
-    }
-}
-
-impl From<UnicodeString> for String {
-    fn from(s: UnicodeString) -> Self {
-        s.into_inner()
-    }
-}
-
-impl fmt::Display for UnicodeString {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
-}
-
-impl fmt::Debug for UnicodeString {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, f)
-    }
-}
-
-impl UnicodeString {
-    pub fn from_bytes(data: &[u8]) -> Result<Self, FromUtf16Error> {
-        assert_eq!(
-            data.len() % 2,
-            0,
-            "A UTF 16 string must have an even number of bytes"
-        );
-        let utf16_buffer =
-            unsafe { std::slice::from_raw_parts(data.as_ptr().cast(), data.len() / 2) };
-        String::from_utf16(utf16_buffer).map(|s| Self(s))
+impl<'a> Wire<'a> for OEMString {
+    fn serialize_into<W>(&self, writer: &mut W) -> io::Result<usize>
+    where
+        W: io::Write,
+    {
+        let bytes = self.0.as_bytes();
+        writer.write_all(bytes)?;
+        Ok(bytes.len())
     }
 
-    pub fn into_inner(self) -> String {
-        self.0
+    fn deserialize<E>(input: &'a [u8]) -> nom::IResult<&'a [u8], Self, E>
+    where
+        E: super::NomError<'a>,
+    {
+        context(
+            "OEM string",
+            map(
+                map_opt(nom::combinator::rest, |b| {
+                    std::str::from_utf8(b).map(|s| s.to_owned()).ok()
+                }),
+                |s| OEMString(s),
+            ),
+        )(input)
     }
 }
 
@@ -80,24 +94,8 @@ impl<'a> Wire<'a> for UnicodeString {
     where
         W: io::Write,
     {
-        self.0.serialize_into(writer)
-    }
-
-    fn deserialize<E>(input: &'a [u8]) -> nom::IResult<&'a [u8], Self, E>
-    where
-        E: super::NomError<'a>,
-    {
-        map(String::deserialize, |s| Self(s))(input)
-    }
-}
-
-impl<'a> Wire<'a> for String {
-    fn serialize_into<W>(&self, writer: &mut W) -> io::Result<usize>
-    where
-        W: io::Write,
-    {
         let mut size = 0;
-        for b in self.encode_utf16() {
+        for b in self.0.encode_utf16() {
             size += write_u16(writer, b)?;
         }
         Ok(size)
@@ -108,11 +106,8 @@ impl<'a> Wire<'a> for String {
         E: super::NomError<'a>,
     {
         context(
-            "UTF-16 string",
-            alt((
-                map_opt(nom::combinator::rest, |b| {
-                    std::str::from_utf8(b).map(|s| s.to_owned()).ok()
-                }),
+            "Unicode string",
+            map(
                 fold_many0(
                     map_opt(le_u16, |b| {
                         if b == 0 {
@@ -127,7 +122,8 @@ impl<'a> Wire<'a> for String {
                         acc
                     },
                 ),
-            )),
+                |s| UnicodeString(s),
+            ),
         )(input)
     }
 }
